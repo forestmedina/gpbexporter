@@ -492,7 +492,9 @@ class Exporter(bpy.types.Operator, ExportHelper):
         node.model.mesh.vertices=mesh.vertices;
         node.model.mesh.parts=mesh.polygons;
         self.objetos.append(node);
-        if bobject.parent.type=='ARMATURE':
+        #cesar original: if bobject.parent.type=='ARMATURE':
+        #cesar cambio:
+        if bobject.parent != None and bobject.parent.type == 'ARMATURE':
             self.procesarArmature(node,bobject);
         return node;
         
