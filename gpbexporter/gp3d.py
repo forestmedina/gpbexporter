@@ -71,6 +71,7 @@ class Node(Reference):
         self.tipoNodo=1;
         self.transforms=[0]*16;
         self.camera=None;
+        self.light=None;
         self.model=None;
         self.childrens=[];
         self.parent_id=None;
@@ -126,7 +127,11 @@ class Node(Reference):
             self.camera.writeData(f);
         else:
             f.write(struct.pack("B",0));
-        f.write(struct.pack("B",0));#luz longitud de cadena 0
+            
+        if not self.light is None:
+            self.light.writeData(f);
+        else:
+            f.write(struct.pack("B",0));#luz longitud de cadena 0
         if not self.model is None:
             self.model.writeData(f);
         else:
@@ -249,7 +254,7 @@ class MeshSkin(Reference):
     
     def __init__(self):
         self.tipo=ReferenceType.MESHSKIN;
-        self.bindShape=[0]*16	;
+        self.bindShape=[0]*16   ;
         self.joints=[];
         self.jointBindPoses=[];
         self.boundingBox=None;
@@ -282,7 +287,34 @@ class MeshSkin(Reference):
         #f.write(struct.pack("<f",0));#Omit bounding sphere
         #f.write(struct.pack("<f",0));#Omit bounding sphere
         #f.write(struct.pack("<f",0));#Omit bounding sphere
-        return ;        
+        return ;   
+        
+        
+#cesar
+class Light(Reference):
+    lightType = None#byte, see LampType class
+    color = []#float r b g 
+    range = 0.0#float
+    innerAngle=0.0#float
+    outerAngle=0.0#float
+    def __init__(self):
+        self.tipo=ReferenceType.LIGHT;
+        self.color = [1.0, 1.0, 1.0];
+        return;
+    
+    def writeData(self, f):
+        self.offset=f.tell();
+        print("lamp writeData %d"%self.offset);
+        f.write(struct.pack("B",self.lightType));
+        f.write(struct.pack("<f",self.color[0]));
+        f.write(struct.pack("<f",self.color[1]));
+        f.write(struct.pack("<f",self.color[2]));
+        if self.lightType == LampType.POINT or self.lightType == LampType.SPOT:
+            f.write(struct.pack("<f",self.range));
+        if self.lightType == LampType.SPOT:
+            f.write(struct.pack("<f",self.innerAngle));
+            f.write(struct.pack("<f",self.outerAngle));
+        return;        
 
 class Camera(Reference):
     cameraType =0#byte {perspective|orthographic}
@@ -316,11 +348,20 @@ class ReferenceType:
     MESH=34;
     MESHSKIN=36;
     CAMERA=32;
+    LIGHT=33; #cesar
 
 
 class NodeType:
     NODE = 1,
     JOINT = 2
+    
+#cesar
+class LampType:
+    DIRECTIONAL= 1;
+    POINT =  2;
+    SPOT= 3; 
+
+    
 
 
 
@@ -485,6 +526,51 @@ class Exporter(bpy.types.Operator, ExportHelper):
         node.camera.fieldOfView=math.degrees(cam.angle);
         return node;        
         
+    def procesarLamp(self, lamp):
+        bobject=lamp;
+        node= Node();
+        node.transforms[0]=bobject.matrix_world[0][0];
+        node.transforms[1]=bobject.matrix_world[1][0];
+        node.transforms[2]=bobject.matrix_world[2][0];
+        node.transforms[3]=bobject.matrix_world[3][0];
+        node.transforms[4]=bobject.matrix_world[0][1];
+        node.transforms[5]=bobject.matrix_world[1][1];
+        node.transforms[6]=bobject.matrix_world[2][1];
+        node.transforms[7]=bobject.matrix_world[3][1];
+        node.transforms[8]=bobject.matrix_world[0][2];
+        node.transforms[9]=bobject.matrix_world[1][2];
+        node.transforms[10]=bobject.matrix_world[2][2];
+        node.transforms[11]=bobject.matrix_world[3][2];
+        node.transforms[12]=bobject.matrix_world[0][3];
+        node.transforms[13]=bobject.matrix_world[1][3];
+        node.transforms[14]=bobject.matrix_world[2][3];
+        node.transforms[15]=bobject.matrix_world[3][3];
+        node.light=Light();
+        node.reference=lamp.name;
+        node.light.reference=lamp.name+"light";
+        lampdata = lamp.data;
+        if lampdata.type == "POINT":
+            node.light.lightType = LampType.POINT;
+        elif lampdata.type == "SUN":
+            node.light.lightType = LampType.DIRECTIONAL;
+        elif lampdata.type == "SPOT":
+            node.light.lightType = LampType.SPOT;
+        else:
+            print("ERROR: lamp type not supported");
+            return;
+        node.light.color[0] = lampdata.color[0];
+        node.light.color[2] = lampdata.color[1];
+        node.light.color[1] = lampdata.color[2];
+        if lampdata.type == "SUN" or lampdata.type == "SPOT":
+            node.light.range = lampdata.distance;
+        if lampdata.type == "SPOT":
+            #spot_size is in radians!
+            node.light.innerAngle = lampdata.spot_size;    
+            node.light.outerAngle = lampdata.spot_size;
+        print("procesando lamp ");
+        self.objetos.append(node);
+        return node;
+        
     def execute(self, context):
         global meshes_to_clear;
         meshes_to_clear=[];
@@ -496,6 +582,8 @@ class Exporter(bpy.types.Operator, ExportHelper):
         for ob in bpy.data.objects:
             if ob.type == 'MESH':
                 self.procesarMesh(ob);
+            elif ob.type == 'LAMP':
+                self.procesarLamp(ob);
         # Create a file header object with data stored in the body section   
         # Open the file for writing
         camera = self.procesarCamera(bpy.data.cameras[bpy.context.scene.camera.name]);
@@ -535,6 +623,4 @@ class Exporter(bpy.types.Operator, ExportHelper):
         for m in meshes_to_clear:
             bpy.data.meshes.remove(m);
         return result;
-
-
 
