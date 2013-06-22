@@ -373,7 +373,8 @@ class LampType:
 
 
 
-class Exporter(bpy.types.Operator, ExportHelper):
+#class Exporter(bpy.types.Operator, ExportHelper):
+class Exporter():
     bl_idname       = "export_gameplay.gpb";
     bl_label        = "Gameplay3d Exporter";
     bl_options      = {'PRESET'};
@@ -632,5 +633,13 @@ class Exporter(bpy.types.Operator, ExportHelper):
             bpy.data.meshes.remove(m);
         return result;
 
+
+# uncomment this block to use the exporter without register in blender ui (using ALT+P)
+print("ejecutando exportador:");
+print(bpy.data.objects);
+_exporter = Exporter();
+_exporter.filepath = "/home/cesar/gameplay/gpbexporter/res/cone.gpb";
+_exporter.execute(None);
+print("archivo ejecutado con exito!");
 
 
