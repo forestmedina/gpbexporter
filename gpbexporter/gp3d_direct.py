@@ -270,7 +270,6 @@ class Mesh(Reference):
                 f.write(struct.pack("<I", 2));#two floats for U,V
         #size in bytes that will require each vertex element 
         f.write(struct.pack("<I",3*len(self.parts)*(self.vertexFormatFloatLen)*4));
-        
         #iterate over polygons and writes each vertex
         print("each vertex will have %d usages and use %d*4 bytes"% (self.numVertexUsages, self.vertexFormatFloatLen))
         print("found %d faces in mesh.." % len(self.parts))
@@ -278,7 +277,6 @@ class Mesh(Reference):
             print("Polygon index: %d, length: %d" % (face.index, face.loop_total))
             for vertexid in face.vertices:
                 self.writeVertex(vertexid, f);
-                
         #Omit bounding box
         f.write(struct.pack("<f",0));#Omit bounding box
         f.write(struct.pack("<f",0));#Omit bounding box
@@ -299,10 +297,19 @@ class Mesh(Reference):
         f.write(struct.pack("<I",4));#GL_TRIANGLES
         f.write(struct.pack("<I",5125));#Unsigned int Index format
         f.write(struct.pack("<I",len(self.parts)*3*4));#Unsigned int Index format
+        '''
+        #instead of export the original index array..
         for p in self.parts:
+            print("write triangle %d %d %d"%(p.vertices[0], p.vertices[1], p.vertices[2]))
             f.write(struct.pack("<I",p.vertices[0]));#VextexSize 3 (x,y,z)
             f.write(struct.pack("<I",p.vertices[1]));#VextexSize 3 (x,y,z)
             f.write(struct.pack("<I",p.vertices[2]));#VextexSize 3 (x,y,z)
+        '''
+        i = 0
+        for face in self.parts:
+            for vertexid in face.vertices:
+                f.write(struct.pack("<I",i));#
+                i=i+1;
         return ;
         
 class MeshSkin(Reference):
