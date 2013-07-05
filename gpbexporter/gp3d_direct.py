@@ -44,6 +44,7 @@ class Reference:
         f.write(struct.pack("<I",self.tipo)),
         self.position=f.tell();
         f.write(struct.pack("<I",self.offset));
+        print("writeReference position %d len %d tipo %d offset %d"%(self.position, len(self.reference),self.tipo, self.offset))
         return ;
 
     def writeExtra(self,f):    
