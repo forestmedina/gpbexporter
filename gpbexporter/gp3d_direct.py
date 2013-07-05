@@ -54,6 +54,7 @@ class Reference:
         return;
         
     def updateOffset(self,f):
+        print("updating offset position %d offset %d"%(self.position, self.offset));
         f.seek(self.position);
         f.write(struct.pack("<I",self.offset));
         return;        
@@ -200,8 +201,8 @@ class Mesh(Reference):
     # with different uv coordinates.
     #
     def writeVertex(self, id, f):
-        print("writeVertex %d"% id);
         v = self.vertices[id]
+        print("writeVertex %d (%f %f %f)"%(id, v.co[0], v.co[1], v.co[2]));
         f.write(struct.pack("<f",v.co[0]));#VextexSize 3 (x,y,z)
         f.write(struct.pack("<f",v.co[1]));#VextexSize 3 (x,y,z)
         f.write(struct.pack("<f",v.co[2]));#VextexSize 3 (x,y,z)
@@ -659,9 +660,8 @@ class Exporter():
         scene.offset=file.tell();
         file.write(struct.pack("<I",len(self.objetos)));
         for o in  self.objetos:
-            o.writeNode(file);
-       
-#write data of scene
+            o.writeNode(file);       
+        #write data of scene
         file.write(struct.pack("<I",len(camera.reference)+1));#camara xref
         file.write(bytearray('#',"ascii"));
         if len(camera.reference)>0:
