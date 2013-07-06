@@ -2,6 +2,7 @@
 Created on 10/05/2013
 
 @author: forestmedina
+@contributor: cesarpachon
 '''
 
 import bpy;

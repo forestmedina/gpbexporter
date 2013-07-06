@@ -2,6 +2,7 @@
 Created on 10/05/2013
 
 @author: forestmedina
+@contributor: cesarpachon
 '''
 
 import bpy;
@@ -198,8 +199,8 @@ class Mesh(Reference):
     # because different polygons share the same vertices 
     # with different uv coordinates.
     #
-    def writeVertex(self, id, f):
-        print("writeVertex %d"% id);
+    def writeVertex(self, vertexfaceid, face, f):
+        id = face.vertices[vertexfaceid]
         v = self.vertices[id]
         f.write(struct.pack("<f",v.co[0]));#VextexSize 3 (x,y,z)
         f.write(struct.pack("<f",v.co[1]));#VextexSize 3 (x,y,z)
@@ -229,7 +230,8 @@ class Mesh(Reference):
         #now export as many uvs as uvlayers in the mesh..
         if self.useUVLayers:
             for uvlayer in self.uvLayers:
-                uvloop = uvlayer.data[id];
+                #uvloop = uvlayer.data[id];
+                uvloop = uvlayer.data[face.loop_indices[vertexfaceid]]
                 f.write(struct.pack("<f",uvloop.uv[0]));
                 f.write(struct.pack("<f",uvloop.uv[1]));
         return;
@@ -268,15 +270,15 @@ class Mesh(Reference):
                 f.write(struct.pack("<I", 2));#two floats for U,V
         #size in bytes that will require each vertex element 
         f.write(struct.pack("<I",3*len(self.parts)*(self.vertexFormatFloatLen)*4));
-        
         #iterate over polygons and writes each vertex
         print("each vertex will have %d usages and use %d*4 bytes"% (self.numVertexUsages, self.vertexFormatFloatLen))
         print("found %d faces in mesh.." % len(self.parts))
         for face in self.parts:
             print("Polygon index: %d, length: %d" % (face.index, face.loop_total))
-            for vertexid in face.vertices:
-                self.writeVertex(vertexid, f);
-                
+            #for vertexid in face.vertices:
+            self.writeVertex(0, face, f);
+            self.writeVertex(1, face, f);
+            self.writeVertex(2, face, f);
         #Omit bounding box
         f.write(struct.pack("<f",0));#Omit bounding box
         f.write(struct.pack("<f",0));#Omit bounding box
@@ -297,10 +299,18 @@ class Mesh(Reference):
         f.write(struct.pack("<I",4));#GL_TRIANGLES
         f.write(struct.pack("<I",5125));#Unsigned int Index format
         f.write(struct.pack("<I",len(self.parts)*3*4));#Unsigned int Index format
+        '''
+        #instead of export the original index array..
         for p in self.parts:
             f.write(struct.pack("<I",p.vertices[0]));#VextexSize 3 (x,y,z)
             f.write(struct.pack("<I",p.vertices[1]));#VextexSize 3 (x,y,z)
             f.write(struct.pack("<I",p.vertices[2]));#VextexSize 3 (x,y,z)
+        '''
+        i = 0
+        for face in self.parts:
+            for vertexid in face.vertices:
+                f.write(struct.pack("<I",i));#
+                i=i+1;
         return ;
         
 class MeshSkin(Reference):
@@ -408,7 +418,6 @@ class NodeType:
     NODE = 1,
     JOINT = 2
     
-#cesar
 class LampType:
     DIRECTIONAL= 1;
     POINT =  2;
@@ -658,11 +667,8 @@ class Exporter(bpy.types.Operator, ExportHelper):
         scene.offset=file.tell();
         file.write(struct.pack("<I",len(self.objetos)));
         for o in  self.objetos:
-            o.writeNode(file);
-
-
-       
-#write data of scene
+            o.writeNode(file);       
+        #write data of scene
         file.write(struct.pack("<I",len(camera.reference)+1));#camara xref
         file.write(bytearray('#',"ascii"));
         if len(camera.reference)>0:
