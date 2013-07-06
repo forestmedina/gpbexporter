@@ -44,7 +44,6 @@ class Reference:
         f.write(struct.pack("<I",self.tipo)),
         self.position=f.tell();
         f.write(struct.pack("<I",self.offset));
-        print("writeReference position %d len %d tipo %d offset %d"%(self.position, len(self.reference),self.tipo, self.offset))
         return ;
 
     def writeExtra(self,f):    
@@ -54,7 +53,6 @@ class Reference:
         return;
         
     def updateOffset(self,f):
-        print("updating offset position %d offset %d"%(self.position, self.offset));
         f.seek(self.position);
         f.write(struct.pack("<I",self.offset));
         return;        
@@ -200,7 +198,8 @@ class Mesh(Reference):
     # because different polygons share the same vertices 
     # with different uv coordinates.
     #
-    def writeVertex(self, id, f):
+    def writeVertex(self, vertexfaceid, face, f):
+        id = face.vertices[vertexfaceid]
         v = self.vertices[id]
         print("writeVertex %d (%f %f %f)"%(id, v.co[0], v.co[1], v.co[2]));
         f.write(struct.pack("<f",v.co[0]));#VextexSize 3 (x,y,z)
@@ -231,9 +230,11 @@ class Mesh(Reference):
         #now export as many uvs as uvlayers in the mesh..
         if self.useUVLayers:
             for uvlayer in self.uvLayers:
-                uvloop = uvlayer.data[id];
+                #uvloop = uvlayer.data[id];
+                uvloop = uvlayer.data[face.loop_indices[vertexfaceid]]
                 f.write(struct.pack("<f",uvloop.uv[0]));
                 f.write(struct.pack("<f",uvloop.uv[1]));
+                print("uv: %f %f"%(uvloop.uv[0], uvloop.uv[1]))
         return;
 
     def writeData(self,f):
@@ -275,8 +276,10 @@ class Mesh(Reference):
         print("found %d faces in mesh.." % len(self.parts))
         for face in self.parts:
             print("Polygon index: %d, length: %d" % (face.index, face.loop_total))
-            for vertexid in face.vertices:
-                self.writeVertex(vertexid, f);
+            #for vertexid in face.vertices:
+            self.writeVertex(0, face, f);
+            self.writeVertex(1, face, f);
+            self.writeVertex(2, face, f);
         #Omit bounding box
         f.write(struct.pack("<f",0));#Omit bounding box
         f.write(struct.pack("<f",0));#Omit bounding box
