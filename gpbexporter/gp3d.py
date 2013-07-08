@@ -2,6 +2,7 @@
 Created on 10/05/2013
 
 @author: forestmedina
+@contributor: cesarpachon
 '''
 
 import bpy;
@@ -184,56 +185,100 @@ class Mesh(Reference):
     boundingSphere="";
     parts="";
     useVertexWeights=False
+    uvLayers=None
+    useUVLayers=False
+    numVertexUsages = 2
+    vertexFormatFloatLen=3+3
     def __init__(self):
         self.tipo=ReferenceType.MESH;
+        return;
+    
+    #
+    # writes a single vertex info to the stream.
+    # notice that each vertex may be written many times,
+    # because different polygons share the same vertices 
+    # with different uv coordinates.
+    #
+    def writeVertex(self, vertexfaceid, face, f):
+        id = face.vertices[vertexfaceid]
+        v = self.vertices[id]
+        f.write(struct.pack("<f",v.co[0]));#VextexSize 3 (x,y,z)
+        f.write(struct.pack("<f",v.co[1]));#VextexSize 3 (x,y,z)
+        f.write(struct.pack("<f",v.co[2]));#VextexSize 3 (x,y,z)
+        f.write(struct.pack("<f",v.normal[0]));#VextexSize 3 (x,y,z)
+        f.write(struct.pack("<f",v.normal[1]));#VextexSize 3 (x,y,z)
+        f.write(struct.pack("<f",v.normal[2]));#VextexSize 3 (x,y,z)
+        if self.useVertexWeights:
+            ngroups=0;
+            for g in v.groups:
+                f.write(struct.pack("<f",g.group));
+                ngroups+=1;
+                if ngroups>=4:
+                    break;
+            while ngroups<4:
+                f.write(struct.pack("<f",0));#VextexSize 3 (x,y,z)
+                ngroups+=1;
+            ngroups=0;
+            for g in v.groups:
+                f.write(struct.pack("<f",g.weight));
+                ngroups+=1;
+                if ngroups>=4:
+                    break;
+            while ngroups<4:
+                f.write(struct.pack("<f",0));#VextexSize 3 (x,y,z)
+                ngroups+=1;
+        #now export as many uvs as uvlayers in the mesh..
+        if self.useUVLayers:
+            for uvlayer in self.uvLayers:
+                #uvloop = uvlayer.data[id];
+                uvloop = uvlayer.data[face.loop_indices[vertexfaceid]]
+                f.write(struct.pack("<f",uvloop.uv[0]));
+                f.write(struct.pack("<f",uvloop.uv[1]));
         return;
 
     def writeData(self,f):
         self.offset=f.tell();
-        numVertexUsages =2
-        vertexFormatFloatLen=3+3#three floats from POSITION, three floats from NORMAL
+        self.numVertexUsages =2
+        self.vertexFormatFloatLen=3+3#three floats from POSITION, three floats from NORMAL
         if self.useVertexWeights:
-            numVertexUsages +=2
-            vertexFormatFloatLen +=8#four floats for BLENDINDICES, four for BLENDWEIGHTS 
-        f.write(struct.pack("<I",numVertexUsages));#Cantidad de vertexUsage
+            self.numVertexUsages +=2
+            self.vertexFormatFloatLen +=8#four floats for BLENDINDICES, four for BLENDWEIGHTS 
+        if self.useUVLayers:
+            #num of usages depends of number of uvlayers..
+            self.numVertexUsages += len(self.uvLayers)
+            self.vertexFormatFloatLen += 2*len(self.uvLayers) #two floats for each uvlayer
+        f.write(struct.pack("<I",self.numVertexUsages));#Cantidad de vertexUsage
+        print("usage POSITION*3")
         f.write(struct.pack("<I",1));#VextexUsage 1-POSITION
         f.write(struct.pack("<I",3));#VextexSize 3 (x,y,z)
+        print("usage NORMAL*2")
         f.write(struct.pack("<I",2));#VextexUsage 2-NORMAL
         f.write(struct.pack("<I",3));#VextexSize 3 (x,y,z)
         if self.useVertexWeights:
+            print("usage BLENDINDICES*4")
             f.write(struct.pack("<I",7));#VextexUsage 7-BLENDINDICES
             f.write(struct.pack("<I",4));#VextexSize 4 max joints
+            print("usage BLENDWEIGHTS*4")
             f.write(struct.pack("<I",6));#VextexUsage 6-BLENDWEIGTHS
             f.write(struct.pack("<I",4));#VextexSize 4 max joints
-        f.write(struct.pack("<I",len(self.vertices)*(vertexFormatFloatLen)*4));#Cantidad de Vertices * 3(Position vertice) * 3 (Normal Vertice) Omitting any other vertice information
-
-        for v in self.vertices:
-            f.write(struct.pack("<f",v.co[0]));#VextexSize 3 (x,y,z)
-            f.write(struct.pack("<f",v.co[1]));#VextexSize 3 (x,y,z)
-            f.write(struct.pack("<f",v.co[2]));#VextexSize 3 (x,y,z)
-            f.write(struct.pack("<f",v.normal[0]));#VextexSize 3 (x,y,z)
-            f.write(struct.pack("<f",v.normal[1]));#VextexSize 3 (x,y,z)
-            f.write(struct.pack("<f",v.normal[2]));#VextexSize 3 (x,y,z)
-            if self.useVertexWeights:
-                ngroups=0;
-                for g in v.groups:
-                    f.write(struct.pack("<f",g.group));
-                    ngroups+=1;
-                    if ngroups>=4:
-                        break;
-                while ngroups<4:
-                    f.write(struct.pack("<f",0));#VextexSize 3 (x,y,z)
-                    ngroups+=1;
-                ngroups=0;
-                for g in v.groups:
-                    f.write(struct.pack("<f",g.weight));
-                    ngroups+=1;
-                    if ngroups>=4:
-                        break;
-                while ngroups<4:
-                    f.write(struct.pack("<f",0));#VextexSize 3 (x,y,z)
-                    ngroups+=1;
-                
+        if self.useUVLayers:
+            textcoordid = 7
+            for layer in self.uvLayers:
+                textcoordid+=1
+                print("usage TEXTCOORDID%d*2"%textcoordid)
+                f.write(struct.pack("<I", textcoordid));
+                f.write(struct.pack("<I", 2));#two floats for U,V
+        #size in bytes that will require each vertex element 
+        f.write(struct.pack("<I",3*len(self.parts)*(self.vertexFormatFloatLen)*4));
+        #iterate over polygons and writes each vertex
+        print("each vertex will have %d usages and use %d*4 bytes"% (self.numVertexUsages, self.vertexFormatFloatLen))
+        print("found %d faces in mesh.." % len(self.parts))
+        for face in self.parts:
+            print("Polygon index: %d, length: %d" % (face.index, face.loop_total))
+            #for vertexid in face.vertices:
+            self.writeVertex(0, face, f);
+            self.writeVertex(1, face, f);
+            self.writeVertex(2, face, f);
         #Omit bounding box
         f.write(struct.pack("<f",0));#Omit bounding box
         f.write(struct.pack("<f",0));#Omit bounding box
@@ -248,14 +293,24 @@ class Mesh(Reference):
         f.write(struct.pack("<f",0));#Omit bounding sphere
         f.write(struct.pack("<f",0));#Omit bounding sphere
         f.write(struct.pack("<f",0));#Omit bounding sphere
+        
+        #mesh parts (faces index array)
         f.write(struct.pack("<I",1));#MeshPart Array of only 1 part
         f.write(struct.pack("<I",4));#GL_TRIANGLES
         f.write(struct.pack("<I",5125));#Unsigned int Index format
         f.write(struct.pack("<I",len(self.parts)*3*4));#Unsigned int Index format
+        '''
+        #instead of export the original index array..
         for p in self.parts:
             f.write(struct.pack("<I",p.vertices[0]));#VextexSize 3 (x,y,z)
             f.write(struct.pack("<I",p.vertices[1]));#VextexSize 3 (x,y,z)
             f.write(struct.pack("<I",p.vertices[2]));#VextexSize 3 (x,y,z)
+        '''
+        i = 0
+        for face in self.parts:
+            for vertexid in face.vertices:
+                f.write(struct.pack("<I",i));#
+                i=i+1;
         return ;
         
 class MeshSkin(Reference):
@@ -346,100 +401,17 @@ class Camera(Reference):
         f.write(struct.pack("<f",self.nearPlane));#VextexUsage 2-NORMAL
         f.write(struct.pack("<f",self.farPlane));#VextexUsage 2-NORMAL
         f.write(struct.pack("<f",self.fieldOfView));#VextexSize 3 (x,y,z)
-        return ;  
-        
-class Animations(Reference):
-    def __init__(self):
-        self.tipo=ReferenceType.ANIMATIONS;
-        self.animations=[];
-        return;
-    def writeReference(self,f):
-        Reference.writeReference(self,f);
-        for c in self.animations:
-            c.writeReference(f);
-        return;
-        
-    def updateOffset(self,f):
-        Reference.updateOffset(self,f);
-        for c in self.animations:
-            c.updateOffset(f);
-        return;
-        
-    def writeData(self,f):
-        self.offset=f.tell();
-        f.write(struct.pack("<I",len(self.animations)));
-        for a in self.animations:
-            a.writeData(f);            
-        return ;      
-        
-        
-class Animation(Reference):
-               
-    def __init__(self):
-        self.tipo=ReferenceType.ANIMATION;
-        self.idani="";
-        self.channels=[];
-        return;
-            
-    def writeData(self,f):
-        self.offset=f.tell();
-        f.write(struct.pack("<I",len(self.idani)));
-        if len(self.idani)>0:
-            f.write(bytearray(self.idani,"ascii"));
-        f.write(struct.pack("<I",len(self.channels)));
-        for a in self.channels:
-            a.writeData(f);      
-        return ;  
-     
-        
-class AnimationChannel(Reference):
-               
-    def __init__(self):
-        self.tipo=ReferenceType.ANIMATION_CHANNEL;
-        self.targetId="";
-        self.targetAttribute=17;
-        self.keyTimes=[];#uint[]  (milliseconds)
-        self.values=[];#                  float[]
-        self.tangents_in=[];#float[]
-        self.tangents_out=[];#float[]
-        self.interpolation=[1];#uint[]
-        return;
-    def writeData(self,f):
-        f.write(struct.pack("<I",len(self.targetId)));
-        if len(self.targetId)>0:
-            f.write(bytearray(self.targetId,"ascii"));
-            
-        f.write(struct.pack("<I",self.targetAttribute));
-        
-        f.write(struct.pack("<I",len(self.keyTimes)));
-        for k in self.keyTimes:
-            f.write(struct.pack("<I",k));
-            
-        f.write(struct.pack("<I",len(self.values)));
-        for v in self.values:
-            f.write(struct.pack("<f",v));
-        ##**********************************************
-        f.write(struct.pack("<I",0));#tangents_in
-        f.write(struct.pack("<I",0));#tangents_out
-        f.write(struct.pack("<I",len(self.interpolation)));
-        for v in self.interpolation:
-            f.write(struct.pack("<I",v));
-        return ;         
+        return ;        
 
 
 class ReferenceType:
     SCENE=1;
     NODE=2;
-    ANIMATIONS=3;
-    ANIMATION=4;
-    ANIMATION_CHANNEL=5;
     MODEL=11;
     MESH=34;
     MESHSKIN=36;
     CAMERA=32;
-    LIGHT=33; #cesar
-    
-    
+    LIGHT=33; 
 
 
 class NodeType:
@@ -554,7 +526,7 @@ class Exporter(bpy.types.Operator, ExportHelper):
             i+=1;
             if b.parent is None:
                 node.childrens.append(bone);
-                #bone.parent_id=node.reference;
+          #      bone.parent_id=node.reference;
                 print(bone.parent_id);
             else:
                 huesos[b.parent.name].childrens.append(bone);
@@ -710,7 +682,6 @@ class Exporter(bpy.types.Operator, ExportHelper):
             #spot_size is in radians!
             node.light.innerAngle = lampdata.spot_size;    
             node.light.outerAngle = lampdata.spot_size;
-        print("procesando lamp ");
         self.objetos.append(node);
         return node;
         
@@ -739,8 +710,7 @@ class Exporter(bpy.types.Operator, ExportHelper):
         file.write(b'\xABGPB\xBB\r\n\x1A\n');
         file.write(struct.pack("B",1));
         file.write(struct.pack("B",2));
-        referece_position=file.tell();
-        file.write(struct.pack("<I",0));#0 se actualiza luego con el
+        file.write(struct.pack("<I",len(self.objetos)*2+1));#+1 for scene reference , *2 for node+mesh reference and node+camera reference 
         scene=Reference();
         scene.tipo=ReferenceType.SCENE;
         scene.reference="__SCENE__";
@@ -752,7 +722,9 @@ class Exporter(bpy.types.Operator, ExportHelper):
         file.write(struct.pack("<I",len(self.objetos)));
         for o in  self.objetos:
             o.writeNode(file);
-        
+
+
+       
 #write data of scene
         file.write(struct.pack("<I",len(camera.reference)+1));#camara xref
         file.write(bytearray('#',"ascii"));
