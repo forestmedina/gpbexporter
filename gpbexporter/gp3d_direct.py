@@ -65,7 +65,7 @@ class Node(Reference):
     parent_id  =""   #string
     childrens   =[]  #Node[]
     camera     =None    #Camera
-    light      =""   #Light
+    light      =None   #Light
     model      =None   #Model
     
     def __init__(self):
@@ -232,7 +232,6 @@ class Mesh(Reference):
     def writeVertex(self, vertexfaceid, face, f):
         id = face.vertices[vertexfaceid]
         v = self.vertices[id]
-        print("writeVertex %d (%f %f %f)"%(id, v.co[0], v.co[1], v.co[2]));
         f.write(struct.pack("<f",v.co[0]));#VextexSize 3 (x,y,z)
         f.write(struct.pack("<f",v.co[1]));#VextexSize 3 (x,y,z)
         f.write(struct.pack("<f",v.co[2]));#VextexSize 3 (x,y,z)
@@ -265,7 +264,6 @@ class Mesh(Reference):
                 uvloop = uvlayer.data[face.loop_indices[vertexfaceid]]
                 f.write(struct.pack("<f",uvloop.uv[0]));
                 f.write(struct.pack("<f",uvloop.uv[1]));
-                print("uv: %f %f"%(uvloop.uv[0], uvloop.uv[1]))
         return;
 
     def writeData(self,f):
@@ -375,7 +373,6 @@ class MeshSkin(Reference):
         return ;   
         
         
-#cesar
 class Light(Reference):
     lightType = None#byte, see LampType class
     color = []#float r b g 
@@ -539,24 +536,6 @@ class Exporter():
         meshes_to_clear.append(mesh);
         node= Node();
         node.setTransform(bobject.matrix_world);
-        '''
-        node.transforms[0]=bobject.matrix_world[0][0];
-        node.transforms[1]=bobject.matrix_world[1][0];
-        node.transforms[2]=bobject.matrix_world[2][0];
-        node.transforms[3]=bobject.matrix_world[3][0];
-        node.transforms[4]=bobject.matrix_world[0][1];
-        node.transforms[5]=bobject.matrix_world[1][1];
-        node.transforms[6]=bobject.matrix_world[2][1];
-        node.transforms[7]=bobject.matrix_world[3][1];
-        node.transforms[8]=bobject.matrix_world[0][2];
-        node.transforms[9]=bobject.matrix_world[1][2];
-        node.transforms[10]=bobject.matrix_world[2][2];
-        node.transforms[11]=bobject.matrix_world[3][2];
-        node.transforms[12]=bobject.matrix_world[0][3];
-        node.transforms[13]=bobject.matrix_world[1][3];
-        node.transforms[14]=bobject.matrix_world[2][3];
-        node.transforms[15]=bobject.matrix_world[3][3];
-        '''
         node.model=Model();
         node.model.mesh=Mesh();
         node.reference=bobject.name;
@@ -577,24 +556,6 @@ class Exporter():
         bobject=bpy.data.objects[cam.name];
         node= Node();
         node.setTransform(bobject.matrix_world);
-        '''
-        node.transforms[0]=bobject.matrix_world[0][0];
-        node.transforms[1]=bobject.matrix_world[1][0];
-        node.transforms[2]=bobject.matrix_world[2][0];
-        node.transforms[3]=bobject.matrix_world[3][0];
-        node.transforms[4]=bobject.matrix_world[0][1];
-        node.transforms[5]=bobject.matrix_world[1][1];
-        node.transforms[6]=bobject.matrix_world[2][1];
-        node.transforms[7]=bobject.matrix_world[3][1];
-        node.transforms[8]=bobject.matrix_world[0][2];
-        node.transforms[9]=bobject.matrix_world[1][2];
-        node.transforms[10]=bobject.matrix_world[2][2];
-        node.transforms[11]=bobject.matrix_world[3][2];
-        node.transforms[12]=bobject.matrix_world[0][3];
-        node.transforms[13]=bobject.matrix_world[1][3];
-        node.transforms[14]=bobject.matrix_world[2][3];
-        node.transforms[15]=bobject.matrix_world[3][3];
-        '''
         node.camera=Camera();
         node.reference=cam.name;
         node.camera.reference=cam.name+"cam";
@@ -648,6 +609,13 @@ class Exporter():
             node.light.outerAngle = lampdata.spot_size;
         self.objetos.append(node);
         return node;
+    
+    def procesarEmpty(self, empty):
+        node= Node();
+        node.setTransform(empty.matrix_world);
+        node.reference = empty.name
+        self.objetos.append(node);
+        return node;
         
     def execute(self, context):
         global meshes_to_clear;
@@ -656,12 +624,16 @@ class Exporter():
         # Set the default return state to FINISHED
         result = {'FINISHED'};
         # Check that the currently selected object contains mesh data for exporting
+        numemptys = 0
         self.objetos=[];
         for ob in bpy.data.objects:
             if ob.type == 'MESH':
                 self.procesarMesh(ob);
             elif ob.type == 'LAMP':
                 self.procesarLamp(ob);
+            elif ob.type == 'EMPTY':
+                self.procesarEmpty(ob);
+                numemptys = numemptys+1
         # Create a file header object with data stored in the body section   
         # Open the file for writing
         camera = self.procesarCamera(bpy.data.cameras[bpy.context.scene.camera.name]);
@@ -670,7 +642,10 @@ class Exporter():
         file.write(b'\xABGPB\xBB\r\n\x1A\n');
         file.write(struct.pack("B",1));
         file.write(struct.pack("B",2));
-        file.write(struct.pack("<I",len(self.objetos)*2+1));#+1 for scene reference , *2 for node+mesh reference and node+camera reference 
+        #+1 for scene reference , *2 for node+mesh reference and node+camera reference .. 
+        # empties have not data associated
+        numreferences = len(self.objetos)*2+1-numemptys;
+        file.write(struct.pack("<I",numreferences));
         scene=Reference();
         scene.tipo=ReferenceType.SCENE;
         scene.reference="__SCENE__";
