@@ -440,6 +440,163 @@ class Exporter(bpy.types.Operator, ExportHelper):
         armature = bobject.data;
         nodeMesh.model.meshSkin=MeshSkin();
         node= Node();
+        matriz=bobject.matrix_world;
+        node.transforms[0]=matriz[0][0];
+        node.transforms[1]=matriz[1][0];
+        node.transforms[2]=matriz[2][0];
+        node.transforms[3]=matriz[3][0];
+        node.transforms[4]=matriz[0][1];
+        node.transforms[5]=matriz[1][1];
+        node.transforms[6]=matriz[2][1];
+        node.transforms[7]=matriz[3][1];
+        node.transforms[8]=matriz[0][2];
+        node.transforms[9]=matriz[1][2];
+        node.transforms[10]=matriz[2][2];
+        node.transforms[11]=matriz[3][2];
+        node.transforms[12]=matriz[0][3];
+        node.transforms[13]=matriz[1][3];
+        node.transforms[14]=matriz[2][3];
+        node.transforms[15]=matriz[3][3];
+        node.tipoNodo=NodeType.JOINT;
+        node.reference=bobject.name;
+        self.objetos.append(node);
+
+        huesos={};
+        matriz=mesh.matrix_parent_inverse;
+        nodeMesh.model.meshSkin.bindShape[0]=matriz[0][0];
+        nodeMesh.model.meshSkin.bindShape[1]=matriz[1][0];
+        nodeMesh.model.meshSkin.bindShape[2]=matriz[2][0];
+        nodeMesh.model.meshSkin.bindShape[3]=matriz[3][0];
+        
+        nodeMesh.model.meshSkin.bindShape[4]=matriz[0][1];
+        nodeMesh.model.meshSkin.bindShape[5]=matriz[1][1];
+        nodeMesh.model.meshSkin.bindShape[6]=matriz[2][1];
+        nodeMesh.model.meshSkin.bindShape[7]=matriz[3][1];
+        
+        nodeMesh.model.meshSkin.bindShape[8]=matriz[0][2];
+        nodeMesh.model.meshSkin.bindShape[9]=matriz[1][2];
+        nodeMesh.model.meshSkin.bindShape[10]=matriz[2][2];
+        nodeMesh.model.meshSkin.bindShape[11]=matriz[3][2];
+        
+        nodeMesh.model.meshSkin.bindShape[12]=matriz[0][3];
+        nodeMesh.model.meshSkin.bindShape[13]=matriz[1][3];
+        nodeMesh.model.meshSkin.bindShape[14]=matriz[2][3];
+        nodeMesh.model.meshSkin.bindShape[15]=matriz[3][3];
+        
+        nodeMesh.model.meshSkin.jointBindPoses=[0]*(len(armature.bones)*16);
+        i=0;
+        for b in armature.bones:
+            bone= Node(); 
+            bone.reference=b.name;
+            nodeMesh.model.meshSkin.joints.append(bone);
+            matriz=mathutils.Matrix();
+            matriz.identity();
+            matriz=bobject.matrix_local*b.matrix_local;
+            mtx4_z90 = mathutils.Matrix.Rotation(math.pi / 2.0, 4, 'X');
+            if b.parent is None:
+                matriz=(b.matrix_local)*mtx4_z90;
+            else:
+                matriz=(b.matrix_local)*mtx4_z90;
+            bone.transforms[0]=matriz[0][0];
+            bone.transforms[1]=matriz[1][0];
+            bone.transforms[2]=matriz[2][0];
+            bone.transforms[3]=matriz[3][0];
+            bone.transforms[4]=matriz[0][1];
+            bone.transforms[5]=matriz[1][1];
+            bone.transforms[6]=matriz[2][1];
+            bone.transforms[7]=matriz[3][1];
+            bone.transforms[8]=matriz[0][2];
+            bone.transforms[9]=matriz[1][2];
+            bone.transforms[10]=matriz[2][2];
+            bone.transforms[11]=matriz[3][2];
+            bone.transforms[12]=matriz[0][3];
+            bone.transforms[13]=matriz[1][3];
+            bone.transforms[14]=matriz[2][3];
+            bone.transforms[15]=matriz[3][3];
+
+#            matriz=bobject.matrix_local*b.matrix_local;
+
+            #matriz.Translation((bobject.matrix_local*b.matrix_local).translation);
+            
+
+
+            nodeMesh.model.meshSkin.jointBindPoses[0+i*16]=matriz[0][0];
+            nodeMesh.model.meshSkin.jointBindPoses[1+i*16]=matriz[1][0];
+            nodeMesh.model.meshSkin.jointBindPoses[2+i*16]=matriz[2][0];
+            nodeMesh.model.meshSkin.jointBindPoses[3+i*16]=matriz[3][0];
+            nodeMesh.model.meshSkin.jointBindPoses[4+i*16]=matriz[0][1];
+            nodeMesh.model.meshSkin.jointBindPoses[5+i*16]=matriz[1][1];
+            nodeMesh.model.meshSkin.jointBindPoses[6+i*16]=matriz[2][1];
+            nodeMesh.model.meshSkin.jointBindPoses[7+i*16]=matriz[3][1];
+            nodeMesh.model.meshSkin.jointBindPoses[8+i*16]=matriz[0][2];
+            nodeMesh.model.meshSkin.jointBindPoses[9+i*16]=matriz[1][2];
+            nodeMesh.model.meshSkin.jointBindPoses[10+i*16]=matriz[2][2];
+            nodeMesh.model.meshSkin.jointBindPoses[11+i*16]=matriz[3][2];
+            nodeMesh.model.meshSkin.jointBindPoses[12+i*16]=matriz[0][3];
+            nodeMesh.model.meshSkin.jointBindPoses[13+i*16]=matriz[1][3];
+            nodeMesh.model.meshSkin.jointBindPoses[14+i*16]=matriz[2][3];
+            nodeMesh.model.meshSkin.jointBindPoses[15+i*16]=matriz[3][3];
+            #****
+         
+            
+            bone.tipoNodo=NodeType.JOINT;
+            huesos[bone.reference]=bone;
+            i+=1;
+            if b.parent is None:
+                node.childrens.append(bone);
+                bone.parent_id=node.reference;
+                print(bone.parent_id);
+            else:
+                huesos[b.parent.name].childrens.append(bone);
+                bone.parent_id=huesos[b.parent.name].reference;
+        return node;
+
+    def procesarAnimation(self,mesh):
+        start=bpy.context.scene.frame_start;
+        end=bpy.context.scene.frame_end;
+        fps=bpy.context.scene.render.fps;
+        bobject=mesh.parent;
+        ani=Animation();
+        ani.idani="animations";
+        ani.reference="animations";
+        armature = bobject;
+        
+        for b in armature.pose.bones:
+            channel= AnimationChannel();
+            channel.targetId=b.name;
+            mtx4_z90 = mathutils.Matrix.Rotation(math.pi / 2.0, 4, 'X');
+
+            for i in range(start,end):
+                bpy.context.scene.frame_set(i);
+                channel.keyTimes.append(round(i*(1000/fps)));
+                #print("keyTime : "+str(round(i*(1000/fps))));
+                #matriz=b.matrix*mtx4_z90;
+
+#                matriz=bobject.matrix_local*b.matrix;
+ #               matriz= mathutils.Matrix();
+#                matriz.Translation(b.matrix.translation);
+                matriz=(b.matrix)*mtx4_z90;
+                qua=matriz.to_quaternion();
+                scale=matriz.to_scale();
+                location=matriz.to_translation();
+                #qua=b.rotation_quaternion;
+                channel.values.append(scale[0]);
+                channel.values.append(scale[1]);
+                channel.values.append(scale[2]);
+                channel.values.append(qua.x);
+                channel.values.append(qua.y);
+                channel.values.append(qua.z);
+                channel.values.append(qua.w);
+                channel.values.append(location[0]);
+                channel.values.append(location[1]);
+                channel.values.append(location[2]);
+            ani.channels.append(channel);
+        self.animaciones.animations.append(ani);
+        
+    def procesarMesh(self, bobject):
+        mesh = bobject.to_mesh(bpy.context.scene,False,'PREVIEW');
+        meshes_to_clear.append(mesh);
+        node= Node();
         node.transforms[0]=bobject.matrix_world[0][0];
         node.transforms[1]=bobject.matrix_world[1][0];
         node.transforms[2]=bobject.matrix_world[2][0];
@@ -456,111 +613,35 @@ class Exporter(bpy.types.Operator, ExportHelper):
         node.transforms[13]=bobject.matrix_world[1][3];
         node.transforms[14]=bobject.matrix_world[2][3];
         node.transforms[15]=bobject.matrix_world[3][3];
-        node.tipoNodo=NodeType.JOINT;
+        #node.transforms[0]=0;
+        #node.transforms[1]=0;
+        #node.transforms[2]=0;
+        #node.transforms[3]=0;
+        #node.transforms[4]=0;
+        #node.transforms[5]=0;
+        #node.transforms[6]=0;
+        #node.transforms[7]=0;
+        #node.transforms[8]=0;
+        #node.transforms[9]=0;
+        #node.transforms[10]=0;
+        #node.transforms[11]=0;
+        #node.transforms[12]=bobject.location[0];
+        #node.transforms[13]=bobject.location[1];
+        #node.transforms[14]=bobject.location[2];
+        #node.transforms[15]=0;
+        node.model=Model();
+        node.model.mesh=Mesh();
         node.reference=bobject.name;
+        node.model.mesh.reference=bobject.name+"mesh";
+        node.model.mesh.vertices=mesh.vertices;
+        node.model.mesh.parts=mesh.polygons;
         self.objetos.append(node);
-        huesos={};
-        nodeMesh.model.meshSkin.bindShape[0]=1.0;
-        nodeMesh.model.meshSkin.bindShape[1]=0.0;
-        nodeMesh.model.meshSkin.bindShape[2]=0.0;
-        nodeMesh.model.meshSkin.bindShape[3]=0.0;
-        
-        nodeMesh.model.meshSkin.bindShape[4]=0.0;
-        nodeMesh.model.meshSkin.bindShape[5]=1.0;
-        nodeMesh.model.meshSkin.bindShape[6]=0.0;
-        nodeMesh.model.meshSkin.bindShape[7]=0.0;
-        
-        nodeMesh.model.meshSkin.bindShape[8]=0.0;
-        nodeMesh.model.meshSkin.bindShape[9]=0.0;
-        nodeMesh.model.meshSkin.bindShape[10]=1.0;
-        nodeMesh.model.meshSkin.bindShape[11]=0.0;
-        
-        nodeMesh.model.meshSkin.bindShape[12]=0.0;
-        nodeMesh.model.meshSkin.bindShape[13]=0.0;
-        nodeMesh.model.meshSkin.bindShape[14]=0.0;
-        nodeMesh.model.meshSkin.bindShape[15]=1.0;
-        
-        nodeMesh.model.meshSkin.jointBindPoses=[0]*(len(armature.bones)*16);
-        i=0;
-        for b in armature.bones:
-            bone= Node();
-            bone.reference=b.name;
-            nodeMesh.model.meshSkin.joints.append(bone);
-            bone.transforms[0]=b.matrix_local[0][0];
-            bone.transforms[1]=b.matrix_local[1][0];
-            bone.transforms[2]=b.matrix_local[2][0];
-            bone.transforms[3]=b.matrix_local[3][0];
-            bone.transforms[4]=b.matrix_local[0][1];
-            bone.transforms[5]=b.matrix_local[1][1];
-            bone.transforms[6]=b.matrix_local[2][1];
-            bone.transforms[7]=b.matrix_local[3][1];
-            bone.transforms[8]=b.matrix_local[0][2];
-            bone.transforms[9]=b.matrix_local[1][2];
-            bone.transforms[10]=b.matrix_local[2][2];
-            bone.transforms[11]=b.matrix_local[3][2];
-            bone.transforms[12]=b.matrix_local[0][3];
-            bone.transforms[13]=b.matrix_local[1][3];
-            bone.transforms[14]=b.matrix_local[2][3];
-            bone.transforms[15]=b.matrix_local[3][3];
-            nodeMesh.model.meshSkin.jointBindPoses[0+i*16]=b.matrix_local[0][0];
-            nodeMesh.model.meshSkin.jointBindPoses[1+i*16]=b.matrix_local[1][0];
-            nodeMesh.model.meshSkin.jointBindPoses[2+i*16]=b.matrix_local[2][0];
-            nodeMesh.model.meshSkin.jointBindPoses[3+i*16]=b.matrix_local[3][0];
-            nodeMesh.model.meshSkin.jointBindPoses[4+i*16]=b.matrix_local[0][1];
-            nodeMesh.model.meshSkin.jointBindPoses[5+i*16]=b.matrix_local[1][1];
-            nodeMesh.model.meshSkin.jointBindPoses[6+i*16]=b.matrix_local[2][1];
-            nodeMesh.model.meshSkin.jointBindPoses[7+i*16]=b.matrix_local[3][1];
-            nodeMesh.model.meshSkin.jointBindPoses[8+i*16]=b.matrix_local[0][2];
-            nodeMesh.model.meshSkin.jointBindPoses[9+i*16]=b.matrix_local[1][2];
-            nodeMesh.model.meshSkin.jointBindPoses[10+i*16]=b.matrix_local[2][2];
-            nodeMesh.model.meshSkin.jointBindPoses[11+i*16]=b.matrix_local[3][2];
-            nodeMesh.model.meshSkin.jointBindPoses[12+i*16]=b.matrix_local[0][3];
-            nodeMesh.model.meshSkin.jointBindPoses[13+i*16]=b.matrix_local[1][3];
-            nodeMesh.model.meshSkin.jointBindPoses[14+i*16]=b.matrix_local[2][3];
-            nodeMesh.model.meshSkin.jointBindPoses[15+i*16]=b.matrix_local[3][3];
-            #****
-         
-            
-            bone.tipoNodo=NodeType.JOINT;
-            huesos[bone.reference]=bone;
-            i+=1;
-            if b.parent is None:
-                node.childrens.append(bone);
-          #      bone.parent_id=node.reference;
-                print(bone.parent_id);
-            else:
-                huesos[b.parent.name].childrens.append(bone);
-                bone.parent_id=huesos[b.parent.name].reference;
+        #cesar original: if bobject.parent.type=='ARMATURE':
+        #cesar cambio:
+        if bobject.parent != None and bobject.parent.type == 'ARMATURE':
+            self.procesarArmature(node,bobject);
+            self.procesarAnimation(bobject);
         return node;
-
-    def procesarAnimation(self,mesh):
-        start=bpy.context.scene.frame_start;
-        end=bpy.context.scene.frame_end;
-        fps=bpy.context.scene.render.fps;
-        bobject=mesh.parent;
-        ani=Animation();
-        ani.idani="animations";
-        ani.reference="animations";
-        armature = bobject;
-        for b in armature.pose.bones:
-            channel= AnimationChannel();
-            channel.targetId=b.name;
-            for i in range(start,end):
-                bpy.context.scene.frame_set(i);
-                channel.keyTimes.append(round(i*(1000/fps)));
-                #print("keyTime : "+str(round(i*(1000/fps))));
-                channel.values.append(b.scale[0]);
-                channel.values.append(b.scale[1]);
-                channel.values.append(b.scale[2]);
-                channel.values.append(b.rotation_quaternion[0]);
-                channel.values.append(b.rotation_quaternion[1]);
-                channel.values.append(b.rotation_quaternion[2]);
-                channel.values.append(b.rotation_quaternion[3]);
-                channel.values.append(b.location[0]);
-                channel.values.append(b.location[1]);
-                channel.values.append(b.location[2]);
-            ani.channels.append(channel);
-        self.animaciones.animations.append(ani);
         
     def procesarMesh(self, bobject):
         mesh = bobject.to_mesh(bpy.context.scene,True,'PREVIEW');
