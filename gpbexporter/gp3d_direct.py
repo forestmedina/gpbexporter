@@ -144,14 +144,33 @@ class Node(Reference):
     # set the transform attribute changing blender to gameplay coordinates
     #method based on: 
     #http://gamedev.stackexchange.com/questions/44058/exporting-bind-and-keyframe-bone-poses-from-blender-to-use-in-opengl
-    def setTransform(self, matrix):
+    def setTransform(self, bobject):
+        matrix = bobject.matrix_world
         # World transform: Blender -> OpenGL
-        worldTransform = mathutils.Matrix().Identity(4)
-        worldTransform *= mathutils.Matrix.Rotation(math.radians(90), 4, "X")
-        worldTransform *= mathutils.Matrix.Scale(-1, 4, (0,0,1))
+        #--
+        #method 1: post multiply for a new transformation matrix
+        # this will add a mirror effect 
+        #worldTransform = mathutils.Matrix().Identity(4)
+        #worldTransform *= mathutils.Matrix.Rotation(math.radians(90), 4, "X")
+        #worldTransform *= mathutils.Matrix.Scale(-1, 4, (0,0,1))
         # Mesh (local) transform matrix
-        matrix_world = matrix.copy()
-        matrix_world = worldTransform * matrix_world
+        #matrix_world = matrix.copy()
+        #matrix_world = worldTransform * matrix_world
+        #--
+        #method 2: build the matrix from scratch (no mult by matrix_world)
+        matrix_world = mathutils.Matrix().Identity(4)
+        loc = bobject.location.copy()
+        val = loc.y
+        loc.y = loc.z
+        loc.z = -val
+        matrix_world*= mathutils.Matrix.Translation(loc)       
+        rot = bobject.rotation_euler
+        matrix_world *= mathutils.Matrix.Rotation(-rot.y, 4, "Z")
+        matrix_world *= mathutils.Matrix.Rotation(rot.z, 4, "Y")
+        matrix_world *= mathutils.Matrix.Rotation(rot.x, 4, "X")
+        matrix_world *= mathutils.Matrix.Scale(bobject.scale.y, 4, (0, 0, 1))
+        matrix_world *= mathutils.Matrix.Scale(bobject.scale.z, 4, (0, 1, 0))
+        matrix_world *= mathutils.Matrix.Scale(bobject.scale.x, 4, (1, 0, 0))
         self.transforms[0]=matrix_world[0][0];
         self.transforms[1]=matrix_world[1][0];
         self.transforms[2]=matrix_world[2][0];
@@ -165,6 +184,9 @@ class Node(Reference):
         self.transforms[10]=matrix_world[2][2];
         self.transforms[11]=matrix_world[3][2];
         self.transforms[12]=matrix_world[0][3];
+        #if you want to manually change coords, it is like this:
+        #self.transforms[14]=-matrix_world[1][3];
+        #self.transforms[13]=matrix_world[2][3];
         self.transforms[13]=matrix_world[1][3];
         self.transforms[14]=matrix_world[2][3];
         self.transforms[15]=matrix_world[3][3];
@@ -233,11 +255,11 @@ class Mesh(Reference):
         id = face.vertices[vertexfaceid]
         v = self.vertices[id]
         f.write(struct.pack("<f",v.co[0]));#VextexSize 3 (x,y,z)
-        f.write(struct.pack("<f",v.co[1]));#VextexSize 3 (x,y,z)
         f.write(struct.pack("<f",v.co[2]));#VextexSize 3 (x,y,z)
+        f.write(struct.pack("<f",-v.co[1]));#VextexSize 3 (x,y,z)
         f.write(struct.pack("<f",v.normal[0]));#VextexSize 3 (x,y,z)
-        f.write(struct.pack("<f",v.normal[1]));#VextexSize 3 (x,y,z)
         f.write(struct.pack("<f",v.normal[2]));#VextexSize 3 (x,y,z)
+        f.write(struct.pack("<f",-v.normal[1]));#VextexSize 3 (x,y,z)
         if self.useVertexWeights:
             ngroups=0;
             for g in v.groups:
@@ -532,10 +554,11 @@ class Exporter():
 
 
     def procesarMesh(self, bobject):
+        print("processing mesh %s"%bobject.name);
         mesh = bobject.to_mesh(bpy.context.scene,True,'PREVIEW');
         meshes_to_clear.append(mesh);
         node= Node();
-        node.setTransform(bobject.matrix_world);
+        node.setTransform(bobject);
         node.model=Model();
         node.model.mesh=Mesh();
         node.reference=bobject.name;
@@ -553,9 +576,10 @@ class Exporter():
         
         
     def procesarCamera(self, cam):
+        print("processing camera %s"%cam.name);
         bobject=bpy.data.objects[cam.name];
         node= Node();
-        node.setTransform(bobject.matrix_world);
+        node.setTransform(bobject);
         node.camera=Camera();
         node.reference=cam.name;
         node.camera.reference=cam.name+"cam";
@@ -567,6 +591,7 @@ class Exporter():
         return node;        
         
     def procesarLamp(self, lamp):
+        print("processing lamp %s"%lamp.name);
         bobject=lamp;
         node= Node();
         node.transforms[0]=bobject.matrix_world[0][0];
@@ -611,8 +636,9 @@ class Exporter():
         return node;
     
     def procesarEmpty(self, empty):
+        print("processing empty %s"%empty.name);
         node= Node();
-        node.setTransform(empty.matrix_world);
+        node.setTransform(empty);
         node.reference = empty.name
         self.objetos.append(node);
         return node;
