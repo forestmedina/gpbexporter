@@ -2,13 +2,12 @@
 Created on 10/05/2013
 
 @author: forestmedina
+@contributor: cesarpachon
 '''
 
 import bpy;
 import struct;
 import math;
-import mathutils;
-
 from bpy_extras.io_utils import ExportHelper
 
 from bpy.utils import (
@@ -140,54 +139,6 @@ class Node(Reference):
         else:
             f.write(struct.pack("<I",0));#mesh
         return ;
-        
-    def setTransform(self, bobject):
-        matrix = bobject.matrix_basis
-        # World transform: Blender -> OpenGL
-        #--
-        #method 1: post multiply for a new transformation matrix
-        # this will add a mirror effect
-        #worldTransform = mathutils.Matrix().Identity(4)
-        #worldTransform *= mathutils.Matrix.Rotation(math.radians(90), 4, "X")
-        #worldTransform *= mathutils.Matrix.Scale(-1, 4, (0,0,1))
-        # Mesh (local) transform matrix
-        #matrix_world = matrix.copy()
-        matrix_world = matrix;
-        #--
-        #method 2: build the matrix from scratch (no mult by matrix_world)
-        #    matrix_world = mathutils.Matrix().Identity(4)
-        #    loc = bobject.location.copy()
-        #   val = loc.y
-        #   loc.y = loc.z
-        # loc.z = -val
-        #matrix_world*= mathutils.Matrix.Translation(loc)
-        #rot = bobject.rotation_euler
-        #matrix_world *= mathutils.Matrix.Rotation(-rot.y, 4, "Z")
-        #matrix_world *= mathutils.Matrix.Rotation(rot.z, 4, "Y")
-        #matrix_world *= mathutils.Matrix.Rotation(rot.x, 4, "X")
-        #matrix_world *= mathutils.Matrix.Scale(bobject.scale.y, 4, (0, 0, 1))
-        #matrix_world *= mathutils.Matrix.Scale(bobject.scale.z, 4, (0, 1, 0))
-        #matrix_world *= mathutils.Matrix.Scale(bobject.scale.x, 4, (1, 0, 0))
-        self.transforms[0]=matrix_world[0][0];
-        self.transforms[1]=matrix_world[1][0];
-        self.transforms[2]=matrix_world[2][0];
-        self.transforms[3]=matrix_world[3][0];
-        self.transforms[4]=matrix_world[0][1];
-        self.transforms[5]=matrix_world[1][1];
-        self.transforms[6]=matrix_world[2][1];
-        self.transforms[7]=matrix_world[3][1];
-        self.transforms[8]=matrix_world[0][2];
-        self.transforms[9]=matrix_world[1][2];
-        self.transforms[10]=matrix_world[2][2];
-        self.transforms[11]=matrix_world[3][2];
-        self.transforms[12]=matrix_world[0][3];
-        #if you want to manually change coords, it is like this:
-        #self.transforms[14]=-matrix_world[1][3];
-        #self.transforms[13]=matrix_world[2][3];
-        self.transforms[13]=matrix_world[1][3];
-        self.transforms[14]=matrix_world[2][3];
-        self.transforms[15]=matrix_world[3][3];
-        return ;
 
 
 class Model (Reference):
@@ -229,7 +180,7 @@ class Model (Reference):
 
 class Mesh(Reference):
     vertexFormat ="";
-    vertices =[];
+    vertices    =[];
     boundingBox ="";
     boundingSphere="";
     parts="";
@@ -245,7 +196,7 @@ class Mesh(Reference):
     #
     # writes a single vertex info to the stream.
     # notice that each vertex may be written many times,
-    # because different polygons share the same vertices
+    # because different polygons share the same vertices 
     # with different uv coordinates.
     #
     def writeVertex(self, vertexfaceid, face, f):
@@ -256,7 +207,7 @@ class Mesh(Reference):
         f.write(struct.pack("<f",v.co[2]));#VextexSize 3 (x,y,z)
         f.write(struct.pack("<f",v.normal[0]));#VextexSize 3 (x,y,z)
         f.write(struct.pack("<f",v.normal[1]));#VextexSize 3 (x,y,z)
-        f.write(struct.pack("<f",-v.normal[2]));#VextexSize 3 (x,y,z)
+        f.write(struct.pack("<f",v.normal[2]));#VextexSize 3 (x,y,z)
         if self.useVertexWeights:
             ngroups=0;
             for g in v.groups:
@@ -291,36 +242,39 @@ class Mesh(Reference):
         self.vertexFormatFloatLen=3+3#three floats from POSITION, three floats from NORMAL
         if self.useVertexWeights:
             self.numVertexUsages +=2
-            self.vertexFormatFloatLen +=8#four floats for BLENDINDICES, four for BLENDWEIGHTS
+            self.vertexFormatFloatLen +=8#four floats for BLENDINDICES, four for BLENDWEIGHTS 
         if self.useUVLayers:
             #num of usages depends of number of uvlayers..
             self.numVertexUsages += len(self.uvLayers)
             self.vertexFormatFloatLen += 2*len(self.uvLayers) #two floats for each uvlayer
         f.write(struct.pack("<I",self.numVertexUsages));#Cantidad de vertexUsage
-        #print("usage POSITION*3")
+        print("usage POSITION*3")
         f.write(struct.pack("<I",1));#VextexUsage 1-POSITION
         f.write(struct.pack("<I",3));#VextexSize 3 (x,y,z)
-        #print("usage NORMAL*2")
+        print("usage NORMAL*2")
         f.write(struct.pack("<I",2));#VextexUsage 2-NORMAL
         f.write(struct.pack("<I",3));#VextexSize 3 (x,y,z)
         if self.useVertexWeights:
-            #print("usage BLENDINDICES*4")
+            print("usage BLENDINDICES*4")
             f.write(struct.pack("<I",7));#VextexUsage 7-BLENDINDICES
             f.write(struct.pack("<I",4));#VextexSize 4 max joints
-            #print("usage BLENDWEIGHTS*4")
+            print("usage BLENDWEIGHTS*4")
             f.write(struct.pack("<I",6));#VextexUsage 6-BLENDWEIGTHS
             f.write(struct.pack("<I",4));#VextexSize 4 max joints
         if self.useUVLayers:
             textcoordid = 7
             for layer in self.uvLayers:
                 textcoordid+=1
-                #print("usage TEXTCOORDID%d*2"%textcoordid)
+                print("usage TEXTCOORDID%d*2"%textcoordid)
                 f.write(struct.pack("<I", textcoordid));
                 f.write(struct.pack("<I", 2));#two floats for U,V
-        #size in bytes that will require each vertex element
+        #size in bytes that will require each vertex element 
         f.write(struct.pack("<I",3*len(self.parts)*(self.vertexFormatFloatLen)*4));
         #iterate over polygons and writes each vertex
+        print("each vertex will have %d usages and use %d*4 bytes"% (self.numVertexUsages, self.vertexFormatFloatLen))
+        print("found %d faces in mesh.." % len(self.parts))
         for face in self.parts:
+            print("Polygon index: %d, length: %d" % (face.index, face.loop_total))
             #for vertexid in face.vertices:
             self.writeVertex(0, face, f);
             self.writeVertex(1, face, f);
@@ -345,6 +299,13 @@ class Mesh(Reference):
         f.write(struct.pack("<I",4));#GL_TRIANGLES
         f.write(struct.pack("<I",5125));#Unsigned int Index format
         f.write(struct.pack("<I",len(self.parts)*3*4));#Unsigned int Index format
+        '''
+        #instead of export the original index array..
+        for p in self.parts:
+            f.write(struct.pack("<I",p.vertices[0]));#VextexSize 3 (x,y,z)
+            f.write(struct.pack("<I",p.vertices[1]));#VextexSize 3 (x,y,z)
+            f.write(struct.pack("<I",p.vertices[2]));#VextexSize 3 (x,y,z)
+        '''
         i = 0
         for face in self.parts:
             for vertexid in face.vertices:
@@ -373,23 +334,22 @@ class MeshSkin(Reference):
             f.write(struct.pack("<I",len(j.reference)+1));#mesh
             f.write(bytearray('#',"ascii"));
             f.write(bytearray(j.reference,"ascii"));
-            print(j.reference)
 
         f.write(struct.pack("<I",len(self.joints)*16));#joints
         for b in self.jointBindPoses:
             f.write(struct.pack("<f",b));
         #Omit bounding box
-        #f.write(struct.pack("<f",-1.0));#Omit bounding box
-        #f.write(struct.pack("<f",-1.0));#Omit bounding box
-        #f.write(struct.pack("<f",-1.0));#Omit bounding box
-        #f.write(struct.pack("<f",1.0));#Omit bounding box
-        #f.write(struct.pack("<f",1.0));#Omit bounding box
-        #f.write(struct.pack("<f",1.0));#Omit bounding box
+        #f.write(struct.pack("<f",0));#Omit bounding box
+        #f.write(struct.pack("<f",0));#Omit bounding box
+        #f.write(struct.pack("<f",0));#Omit bounding box
+        #f.write(struct.pack("<f",0));#Omit bounding box
+        #f.write(struct.pack("<f",0));#Omit bounding box
+        #f.write(struct.pack("<f",0));#Omit bounding box
         #Omit bounding sphere
         #f.write(struct.pack("<f",0));#Omit bounding sphere
         #f.write(struct.pack("<f",0));#Omit bounding sphere
         #f.write(struct.pack("<f",0));#Omit bounding sphere
-        #f.write(struct.pack("<f",1.0));#Omit bounding sphere
+        #f.write(struct.pack("<f",0));#Omit bounding sphere
         return ;   
         
         
@@ -441,102 +401,17 @@ class Camera(Reference):
         f.write(struct.pack("<f",self.nearPlane));#VextexUsage 2-NORMAL
         f.write(struct.pack("<f",self.farPlane));#VextexUsage 2-NORMAL
         f.write(struct.pack("<f",self.fieldOfView));#VextexSize 3 (x,y,z)
-        return ;  
-        
-class Animations(Reference):
-    def __init__(self):
-        self.tipo=ReferenceType.ANIMATIONS;
-        self.animations=[];
-        return;
-    def writeReference(self,f):
-        Reference.writeReference(self,f);
-        for c in self.animations:
-            print (c.reference)
-            c.writeReference(f);
-        return;
-        
-    def updateOffset(self,f):
-        Reference.updateOffset(self,f);
-        for c in self.animations:
-            c.updateOffset(f);
-        return;
-        
-    def writeData(self,f):
-        self.offset=f.tell();
-        f.write(struct.pack("<I",len(self.animations)));
-        for a in self.animations:
-            a.writeData(f);            
-        return ;      
-        
-        
-class Animation(Reference):
-               
-    def __init__(self):
-        self.tipo=ReferenceType.ANIMATION;
-        self.idani="";
-        self.channels=[];
-        return;
-            
-    def writeData(self,f):
-        self.offset=f.tell();
-        f.write(struct.pack("<I",len(self.idani)));
-        if len(self.idani)>0:
-            f.write(bytearray(self.idani,"ascii"));
-        f.write(struct.pack("<I",len(self.channels)));
-        for a in self.channels:
-            print (a.reference)
-            a.writeData(f);      
-        return ;  
-     
-        
-class AnimationChannel(Reference):
-               
-    def __init__(self):
-        self.tipo=ReferenceType.ANIMATION_CHANNEL;
-        self.targetId="";
-        self.targetAttribute=17;
-        self.keyTimes=[];#uint[]  (milliseconds)
-        self.values=[];#                  float[]
-        self.tangents_in=[];#float[]
-        self.tangents_out=[];#float[]
-        self.interpolation=[1];#uint[]
-        return;
-    def writeData(self,f):
-        f.write(struct.pack("<I",len(self.targetId)));
-        if len(self.targetId)>0:
-            f.write(bytearray(self.targetId,"ascii"));
-            print (self.targetId)
-        f.write(struct.pack("<I",self.targetAttribute));
-        
-        f.write(struct.pack("<I",len(self.keyTimes)));
-        for k in self.keyTimes:
-            f.write(struct.pack("<I",k));
-            
-        f.write(struct.pack("<I",len(self.values)));
-        for v in self.values:
-            f.write(struct.pack("<f",v));
-        ##**********************************************
-        f.write(struct.pack("<I",0));#tangents_in
-        f.write(struct.pack("<I",0));#tangents_out
-        f.write(struct.pack("<I",len(self.interpolation)));
-        for v in self.interpolation:
-            f.write(struct.pack("<I",v));
-        return ;         
+        return ;        
 
 
 class ReferenceType:
     SCENE=1;
     NODE=2;
-    ANIMATIONS=3;
-    ANIMATION=4;
-    ANIMATION_CHANNEL=5;
     MODEL=11;
     MESH=34;
     MESHSKIN=36;
     CAMERA=32;
-    LIGHT=33; #cesar
-    
-    
+    LIGHT=33; 
 
 
 class NodeType:
@@ -552,143 +427,97 @@ class LampType:
     
 
 
-#class Exporter():
+
 class Exporter(bpy.types.Operator, ExportHelper):
     bl_idname       = "export_gameplay.gpb";
     bl_label        = "Gameplay3d Exporter";
     bl_options      = {'PRESET'};
     filename_ext    = ".gpb";
     objetos=[];
-
-    def fixBoneMatrix(self,matrix):
-        matrix_world = mathutils.Matrix().Identity(4);
-        loc = matrix.to_translation().copy();
-        val = loc.y;
-        loc.y = loc.z;
-        loc.z = val;
-        matrix_world*= mathutils.Matrix.Translation(loc);       
-        rot =matrix.to_euler().copy();
-        scale=matrix.to_scale();
-        matrix_world *= mathutils.Matrix.Rotation(rot.y, 4, "Z");
-        matrix_world *= mathutils.Matrix.Rotation(rot.z, 4, "Y");
-        matrix_world *= mathutils.Matrix.Rotation(rot.x, 4, "X");
-        matrix_world *= mathutils.Matrix.Scale(scale.y, 4, (0, 0, 1));
-        matrix_world *= mathutils.Matrix.Scale(scale.z, 4, (0, 1, 0));
-        matrix_world *= mathutils.Matrix.Scale(scale.x, 4, (1, 0, 0));
-        mtx4_z90 =mathutils.Matrix.Rotation(math.radians(-90), 4, "X");
-        matrix_world=matrix*mtx4_z90;
-        return matrix_world;
-
+    
     def procesarArmature(self,nodeMesh, mesh):
         bobject=mesh.parent;
         armature = bobject.data;
         nodeMesh.model.meshSkin=MeshSkin();
         node= Node();
-        matriz=bobject.matrix_basis;
-        node.transforms[0]=matriz[0][0];
-        node.transforms[1]=matriz[1][0];
-        node.transforms[2]=matriz[2][0];
-        node.transforms[3]=matriz[3][0];
-        node.transforms[4]=matriz[0][1];
-        node.transforms[5]=matriz[1][1];
-        node.transforms[6]=matriz[2][1];
-        node.transforms[7]=matriz[3][1];
-        node.transforms[8]=matriz[0][2];
-        node.transforms[9]=matriz[1][2];
-        node.transforms[10]=matriz[2][2];
-        node.transforms[11]=matriz[3][2];
-        node.transforms[12]=matriz[0][3];
-        node.transforms[13]=matriz[1][3];
-        node.transforms[14]=matriz[2][3];
-        node.transforms[15]=matriz[3][3];
+        node.transforms[0]=bobject.matrix_world[0][0];
+        node.transforms[1]=bobject.matrix_world[1][0];
+        node.transforms[2]=bobject.matrix_world[2][0];
+        node.transforms[3]=bobject.matrix_world[3][0];
+        node.transforms[4]=bobject.matrix_world[0][1];
+        node.transforms[5]=bobject.matrix_world[1][1];
+        node.transforms[6]=bobject.matrix_world[2][1];
+        node.transforms[7]=bobject.matrix_world[3][1];
+        node.transforms[8]=bobject.matrix_world[0][2];
+        node.transforms[9]=bobject.matrix_world[1][2];
+        node.transforms[10]=bobject.matrix_world[2][2];
+        node.transforms[11]=bobject.matrix_world[3][2];
+        node.transforms[12]=bobject.matrix_world[0][3];
+        node.transforms[13]=bobject.matrix_world[1][3];
+        node.transforms[14]=bobject.matrix_world[2][3];
+        node.transforms[15]=bobject.matrix_world[3][3];
         node.tipoNodo=NodeType.JOINT;
         node.reference=bobject.name;
         self.objetos.append(node);
-
         huesos={};
-        matriz=mathutils.Matrix();
-        matriz.identity();
-        #matriz=mesh.matrix_parent_inverse;
-        nodeMesh.model.meshSkin.bindShape[0]=matriz[0][0];
-        nodeMesh.model.meshSkin.bindShape[1]=matriz[1][0];
-        nodeMesh.model.meshSkin.bindShape[2]=matriz[2][0];
-        nodeMesh.model.meshSkin.bindShape[3]=matriz[3][0];
+        nodeMesh.model.meshSkin.bindShape[0]=1.0;
+        nodeMesh.model.meshSkin.bindShape[1]=0.0;
+        nodeMesh.model.meshSkin.bindShape[2]=0.0;
+        nodeMesh.model.meshSkin.bindShape[3]=0.0;
         
-        nodeMesh.model.meshSkin.bindShape[4]=matriz[0][1];
-        nodeMesh.model.meshSkin.bindShape[5]=matriz[1][1];
-        nodeMesh.model.meshSkin.bindShape[6]=matriz[2][1];
-        nodeMesh.model.meshSkin.bindShape[7]=matriz[3][1];
+        nodeMesh.model.meshSkin.bindShape[4]=0.0;
+        nodeMesh.model.meshSkin.bindShape[5]=1.0;
+        nodeMesh.model.meshSkin.bindShape[6]=0.0;
+        nodeMesh.model.meshSkin.bindShape[7]=0.0;
         
-        nodeMesh.model.meshSkin.bindShape[8]=matriz[0][2];
-        nodeMesh.model.meshSkin.bindShape[9]=matriz[1][2];
-        nodeMesh.model.meshSkin.bindShape[10]=matriz[2][2];
-        nodeMesh.model.meshSkin.bindShape[11]=matriz[3][2];
+        nodeMesh.model.meshSkin.bindShape[8]=0.0;
+        nodeMesh.model.meshSkin.bindShape[9]=0.0;
+        nodeMesh.model.meshSkin.bindShape[10]=1.0;
+        nodeMesh.model.meshSkin.bindShape[11]=0.0;
         
-        nodeMesh.model.meshSkin.bindShape[12]=matriz[0][3];
-        nodeMesh.model.meshSkin.bindShape[13]=matriz[1][3];
-        nodeMesh.model.meshSkin.bindShape[14]=matriz[2][3];
-        nodeMesh.model.meshSkin.bindShape[15]=matriz[3][3];
+        nodeMesh.model.meshSkin.bindShape[12]=0.0;
+        nodeMesh.model.meshSkin.bindShape[13]=0.0;
+        nodeMesh.model.meshSkin.bindShape[14]=0.0;
+        nodeMesh.model.meshSkin.bindShape[15]=1.0;
         
         nodeMesh.model.meshSkin.jointBindPoses=[0]*(len(armature.bones)*16);
         i=0;
         for b in armature.bones:
-            bone= Node(); 
-            bone.reference=bobject.name+b.name;
+            bone= Node();
+            bone.reference=b.name;
             nodeMesh.model.meshSkin.joints.append(bone);
-            matriz=mathutils.Matrix();
-            matriz.identity();
-#            matriz=bobject.matrix_local*b.matrix_local;
-            mtx4_z90 =mathutils.Matrix.Rotation(math.radians(-90), 4, "X");
-        
-            if b.parent is None:
-                matriz=self.fixBoneMatrix(b.matrix_local);
-            else:
-                matriz=self.fixBoneMatrix(b.parent.matrix_local).inverted()*self.fixBoneMatrix(b.matrix_local);
-# matriz=(b.matrix_local)*mtx4_z90;
-            bone.transforms[0]=matriz[0][0];
-            bone.transforms[1]=matriz[1][0];
-            bone.transforms[2]=matriz[2][0];
-            bone.transforms[3]=matriz[3][0];
-            bone.transforms[4]=matriz[0][1];
-            bone.transforms[5]=matriz[1][1];
-            bone.transforms[6]=matriz[2][1];
-            bone.transforms[7]=matriz[3][1];
-            bone.transforms[8]=matriz[0][2];
-            bone.transforms[9]=matriz[1][2];
-            bone.transforms[10]=matriz[2][2];
-            bone.transforms[11]=matriz[3][2];
-            bone.transforms[12]=matriz[0][3];
-            bone.transforms[13]=matriz[1][3];
-            bone.transforms[14]=matriz[2][3];
-            bone.transforms[15]=matriz[3][3];
-            if b.parent is None:
-                matriz=self.fixBoneMatrix(b.matrix_local).inverted();
-            else:
-                matriz=self.fixBoneMatrix(b.matrix_local).inverted();
-
-
-#            matriz=bobject.matrix_local*b.matrix_local;
-
-            #matriz.Translation((bobject.matrix_local*b.matrix_local).translation);
-            
-
-
-            nodeMesh.model.meshSkin.jointBindPoses[0+i*16]=matriz[0][0];
-            nodeMesh.model.meshSkin.jointBindPoses[1+i*16]=matriz[1][0];
-            nodeMesh.model.meshSkin.jointBindPoses[2+i*16]=matriz[2][0];
-            nodeMesh.model.meshSkin.jointBindPoses[3+i*16]=matriz[3][0];
-            nodeMesh.model.meshSkin.jointBindPoses[4+i*16]=matriz[0][1];
-            nodeMesh.model.meshSkin.jointBindPoses[5+i*16]=matriz[1][1];
-            nodeMesh.model.meshSkin.jointBindPoses[6+i*16]=matriz[2][1];
-            nodeMesh.model.meshSkin.jointBindPoses[7+i*16]=matriz[3][1];
-            nodeMesh.model.meshSkin.jointBindPoses[8+i*16]=matriz[0][2];
-            nodeMesh.model.meshSkin.jointBindPoses[9+i*16]=matriz[1][2];
-            nodeMesh.model.meshSkin.jointBindPoses[10+i*16]=matriz[2][2];
-            nodeMesh.model.meshSkin.jointBindPoses[11+i*16]=matriz[3][2];
-            nodeMesh.model.meshSkin.jointBindPoses[12+i*16]=matriz[0][3];
-            nodeMesh.model.meshSkin.jointBindPoses[13+i*16]=matriz[1][3];
-            nodeMesh.model.meshSkin.jointBindPoses[14+i*16]=matriz[2][3];
-            nodeMesh.model.meshSkin.jointBindPoses[15+i*16]=matriz[3][3];
+            bone.transforms[0]=b.matrix_local[0][0];
+            bone.transforms[1]=b.matrix_local[1][0];
+            bone.transforms[2]=b.matrix_local[2][0];
+            bone.transforms[3]=b.matrix_local[3][0];
+            bone.transforms[4]=b.matrix_local[0][1];
+            bone.transforms[5]=b.matrix_local[1][1];
+            bone.transforms[6]=b.matrix_local[2][1];
+            bone.transforms[7]=b.matrix_local[3][1];
+            bone.transforms[8]=b.matrix_local[0][2];
+            bone.transforms[9]=b.matrix_local[1][2];
+            bone.transforms[10]=b.matrix_local[2][2];
+            bone.transforms[11]=b.matrix_local[3][2];
+            bone.transforms[12]=b.matrix_local[0][3];
+            bone.transforms[13]=b.matrix_local[1][3];
+            bone.transforms[14]=b.matrix_local[2][3];
+            bone.transforms[15]=b.matrix_local[3][3];
+            nodeMesh.model.meshSkin.jointBindPoses[0+i*16]=b.matrix_local[0][0];
+            nodeMesh.model.meshSkin.jointBindPoses[1+i*16]=b.matrix_local[1][0];
+            nodeMesh.model.meshSkin.jointBindPoses[2+i*16]=b.matrix_local[2][0];
+            nodeMesh.model.meshSkin.jointBindPoses[3+i*16]=b.matrix_local[3][0];
+            nodeMesh.model.meshSkin.jointBindPoses[4+i*16]=b.matrix_local[0][1];
+            nodeMesh.model.meshSkin.jointBindPoses[5+i*16]=b.matrix_local[1][1];
+            nodeMesh.model.meshSkin.jointBindPoses[6+i*16]=b.matrix_local[2][1];
+            nodeMesh.model.meshSkin.jointBindPoses[7+i*16]=b.matrix_local[3][1];
+            nodeMesh.model.meshSkin.jointBindPoses[8+i*16]=b.matrix_local[0][2];
+            nodeMesh.model.meshSkin.jointBindPoses[9+i*16]=b.matrix_local[1][2];
+            nodeMesh.model.meshSkin.jointBindPoses[10+i*16]=b.matrix_local[2][2];
+            nodeMesh.model.meshSkin.jointBindPoses[11+i*16]=b.matrix_local[3][2];
+            nodeMesh.model.meshSkin.jointBindPoses[12+i*16]=b.matrix_local[0][3];
+            nodeMesh.model.meshSkin.jointBindPoses[13+i*16]=b.matrix_local[1][3];
+            nodeMesh.model.meshSkin.jointBindPoses[14+i*16]=b.matrix_local[2][3];
+            nodeMesh.model.meshSkin.jointBindPoses[15+i*16]=b.matrix_local[3][3];
             #****
          
             
@@ -697,11 +526,11 @@ class Exporter(bpy.types.Operator, ExportHelper):
             i+=1;
             if b.parent is None:
                 node.childrens.append(bone);
-                bone.parent_id=node.reference;
+          #      bone.parent_id=node.reference;
                 print(bone.parent_id);
             else:
-                huesos[bobject.name+b.parent.name].childrens.append(bone);
-                bone.parent_id=huesos[bobject.name+b.parent.name].reference;
+                huesos[b.parent.name].childrens.append(bone);
+                bone.parent_id=huesos[b.parent.name].reference;
         return node;
 
     def procesarAnimation(self,mesh):
@@ -710,51 +539,65 @@ class Exporter(bpy.types.Operator, ExportHelper):
         fps=bpy.context.scene.render.fps;
         bobject=mesh.parent;
         ani=Animation();
-        ani.idani=mesh.name+"ani";
-        ani.reference=mesh.name+"ani";
+        ani.idani="animations";
+        ani.reference="animations";
         armature = bobject;
-        
         for b in armature.pose.bones:
             channel= AnimationChannel();
-            channel.targetId=bobject.name+b.name;
-            mtx4_z90 =mathutils.Matrix.Rotation(math.radians(-90), 4, "X")
-
+            channel.targetId=b.name;
             for i in range(start,end):
                 bpy.context.scene.frame_set(i);
                 channel.keyTimes.append(round(i*(1000/fps)));
                 #print("keyTime : "+str(round(i*(1000/fps))));
-                #matriz=b.matrix*mtx4_z90;
-
-#                matriz=bobject.matrix_local*b.matrix;
- #               matriz= mathutils.Matrix();
-#                matriz.Translation(b.matrix.translation);
-                if b.parent is None:
-                    matriz=self.fixBoneMatrix(b.matrix);
-                else:
-                    matriz=self.fixBoneMatrix(b.parent.matrix).inverted()*self.fixBoneMatrix(b.matrix);
-                qua=matriz.to_quaternion();
-                scale=matriz.to_scale();
-                location=matriz.to_translation();
-                #qua=b.rotation_quaternion;
-                channel.values.append(scale[0]);
-                channel.values.append(scale[1]);
-                channel.values.append(scale[2]);
-                channel.values.append(qua.x);
-                channel.values.append(qua.y);
-                channel.values.append(qua.z);
-                channel.values.append(qua.w);
-                channel.values.append(location[0]);
-                channel.values.append(location[1]);
-                channel.values.append(location[2]);
+                channel.values.append(b.scale[0]);
+                channel.values.append(b.scale[1]);
+                channel.values.append(b.scale[2]);
+                channel.values.append(b.rotation_quaternion[0]);
+                channel.values.append(b.rotation_quaternion[1]);
+                channel.values.append(b.rotation_quaternion[2]);
+                channel.values.append(b.rotation_quaternion[3]);
+                channel.values.append(b.location[0]);
+                channel.values.append(b.location[1]);
+                channel.values.append(b.location[2]);
             ani.channels.append(channel);
         self.animaciones.animations.append(ani);
         
     def procesarMesh(self, bobject):
-        print("processing mesh %s"%bobject.name);
         mesh = bobject.to_mesh(bpy.context.scene,True,'PREVIEW');
         meshes_to_clear.append(mesh);
         node= Node();
-        node.setTransform(bobject);
+        node.transforms[0]=bobject.matrix_world[0][0];
+        node.transforms[1]=bobject.matrix_world[1][0];
+        node.transforms[2]=bobject.matrix_world[2][0];
+        node.transforms[3]=bobject.matrix_world[3][0];
+        node.transforms[4]=bobject.matrix_world[0][1];
+        node.transforms[5]=bobject.matrix_world[1][1];
+        node.transforms[6]=bobject.matrix_world[2][1];
+        node.transforms[7]=bobject.matrix_world[3][1];
+        node.transforms[8]=bobject.matrix_world[0][2];
+        node.transforms[9]=bobject.matrix_world[1][2];
+        node.transforms[10]=bobject.matrix_world[2][2];
+        node.transforms[11]=bobject.matrix_world[3][2];
+        node.transforms[12]=bobject.matrix_world[0][3];
+        node.transforms[13]=bobject.matrix_world[1][3];
+        node.transforms[14]=bobject.matrix_world[2][3];
+        node.transforms[15]=bobject.matrix_world[3][3];
+        #node.transforms[0]=0;
+        #node.transforms[1]=0;
+        #node.transforms[2]=0;
+        #node.transforms[3]=0;
+        #node.transforms[4]=0;
+        #node.transforms[5]=0;
+        #node.transforms[6]=0;
+        #node.transforms[7]=0;
+        #node.transforms[8]=0;
+        #node.transforms[9]=0;
+        #node.transforms[10]=0;
+        #node.transforms[11]=0;
+        #node.transforms[12]=bobject.location[0];
+        #node.transforms[13]=bobject.location[1];
+        #node.transforms[14]=bobject.location[2];
+        #node.transforms[15]=0;
         node.model=Model();
         node.model.mesh=Mesh();
         node.reference=bobject.name;
@@ -762,13 +605,10 @@ class Exporter(bpy.types.Operator, ExportHelper):
         node.model.mesh.vertices=mesh.vertices;
         node.model.mesh.parts=mesh.polygons;
         self.objetos.append(node);
-        if bobject.parent != None and  bobject.parent.type == 'ARMATURE':
+        if bobject.parent != None and bobject.parent.type == 'ARMATURE':
             node.model.mesh.useVertexWeights = True
             self.procesarArmature(node,bobject);
             self.procesarAnimation(bobject);
-        if len(mesh.uv_layers)>0:
-            node.model.mesh.useUVLayers = True
-            node.model.mesh.uvLayers = mesh.uv_layers
         return node;
         
         
@@ -842,7 +682,6 @@ class Exporter(bpy.types.Operator, ExportHelper):
             #spot_size is in radians!
             node.light.innerAngle = lampdata.spot_size;    
             node.light.outerAngle = lampdata.spot_size;
-        print("procesando lamp ");
         self.objetos.append(node);
         return node;
         
@@ -871,8 +710,7 @@ class Exporter(bpy.types.Operator, ExportHelper):
         file.write(b'\xABGPB\xBB\r\n\x1A\n');
         file.write(struct.pack("B",1));
         file.write(struct.pack("B",2));
-        referece_position=file.tell();
-        file.write(struct.pack("<I",0));#0 se actualiza luego con el
+        file.write(struct.pack("<I",len(self.objetos)*2+1));#+1 for scene reference , *2 for node+mesh reference and node+camera reference 
         scene=Reference();
         scene.tipo=ReferenceType.SCENE;
         scene.reference="__SCENE__";
@@ -881,11 +719,12 @@ class Exporter(bpy.types.Operator, ExportHelper):
             o.writeReference(file);
         self.animaciones.writeReference(file);
         scene.offset=file.tell();
-        
         file.write(struct.pack("<I",len(self.objetos)));
         for o in  self.objetos:
             o.writeNode(file);
-        
+
+
+       
 #write data of scene
         file.write(struct.pack("<I",len(camera.reference)+1));#camara xref
         file.write(bytearray('#',"ascii"));
@@ -908,5 +747,6 @@ class Exporter(bpy.types.Operator, ExportHelper):
         for m in meshes_to_clear:
             bpy.data.meshes.remove(m);
         return result;
+
 
 
