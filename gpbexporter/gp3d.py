@@ -7,6 +7,7 @@ Created on 10/05/2013
 
 import bpy;
 import struct;
+import mathutils;
 import math;
 from bpy_extras.io_utils import ExportHelper
 
@@ -66,7 +67,7 @@ class Node(Reference):
     parent_id  =""   #string
     childrens   =[]  #Node[]
     camera     =None    #Camera
-    light      =""   #Light
+    light      =None   #Light
     model      =None   #Model
     
     def __init__(self):
@@ -128,8 +129,7 @@ class Node(Reference):
         if not self.camera is None:
             self.camera.writeData(f);
         else:
-            f.write(struct.pack("B",0));
-            
+            f.write(struct.pack("B",0));            
         if not self.light is None:
             self.light.writeData(f);
         else:
@@ -138,6 +138,36 @@ class Node(Reference):
             self.model.writeData(f);
         else:
             f.write(struct.pack("<I",0));#mesh
+        return ;
+    
+    #
+    # set the transform attribute changing blender to gameplay coordinates
+    #method based on: 
+    #http://gamedev.stackexchange.com/questions/44058/exporting-bind-and-keyframe-bone-poses-from-blender-to-use-in-opengl
+    def setTransform(self, matrix):
+        # World transform: Blender -> OpenGL
+        worldTransform = mathutils.Matrix().Identity(4)
+        worldTransform *= mathutils.Matrix.Rotation(math.radians(90), 4, "X")
+        worldTransform *= mathutils.Matrix.Scale(-1, 4, (0,0,1))
+        # Mesh (local) transform matrix
+        matrix_world = matrix.copy()
+        matrix_world = worldTransform * matrix_world
+        self.transforms[0]=matrix_world[0][0];
+        self.transforms[1]=matrix_world[1][0];
+        self.transforms[2]=matrix_world[2][0];
+        self.transforms[3]=matrix_world[3][0];
+        self.transforms[4]=matrix_world[0][1];
+        self.transforms[5]=matrix_world[1][1];
+        self.transforms[6]=matrix_world[2][1];
+        self.transforms[7]=matrix_world[3][1];
+        self.transforms[8]=matrix_world[0][2];
+        self.transforms[9]=matrix_world[1][2];
+        self.transforms[10]=matrix_world[2][2];
+        self.transforms[11]=matrix_world[3][2];
+        self.transforms[12]=matrix_world[0][3];
+        self.transforms[13]=matrix_world[1][3];
+        self.transforms[14]=matrix_world[2][3];
+        self.transforms[15]=matrix_world[3][3];
         return ;
 
 
@@ -248,33 +278,30 @@ class Mesh(Reference):
             self.numVertexUsages += len(self.uvLayers)
             self.vertexFormatFloatLen += 2*len(self.uvLayers) #two floats for each uvlayer
         f.write(struct.pack("<I",self.numVertexUsages));#Cantidad de vertexUsage
-        print("usage POSITION*3")
+        #print("usage POSITION*3")
         f.write(struct.pack("<I",1));#VextexUsage 1-POSITION
         f.write(struct.pack("<I",3));#VextexSize 3 (x,y,z)
-        print("usage NORMAL*2")
+        #print("usage NORMAL*2")
         f.write(struct.pack("<I",2));#VextexUsage 2-NORMAL
         f.write(struct.pack("<I",3));#VextexSize 3 (x,y,z)
         if self.useVertexWeights:
-            print("usage BLENDINDICES*4")
+            #print("usage BLENDINDICES*4")
             f.write(struct.pack("<I",7));#VextexUsage 7-BLENDINDICES
             f.write(struct.pack("<I",4));#VextexSize 4 max joints
-            print("usage BLENDWEIGHTS*4")
+            #print("usage BLENDWEIGHTS*4")
             f.write(struct.pack("<I",6));#VextexUsage 6-BLENDWEIGTHS
             f.write(struct.pack("<I",4));#VextexSize 4 max joints
         if self.useUVLayers:
             textcoordid = 7
             for layer in self.uvLayers:
                 textcoordid+=1
-                print("usage TEXTCOORDID%d*2"%textcoordid)
+                #print("usage TEXTCOORDID%d*2"%textcoordid)
                 f.write(struct.pack("<I", textcoordid));
                 f.write(struct.pack("<I", 2));#two floats for U,V
         #size in bytes that will require each vertex element 
         f.write(struct.pack("<I",3*len(self.parts)*(self.vertexFormatFloatLen)*4));
         #iterate over polygons and writes each vertex
-        print("each vertex will have %d usages and use %d*4 bytes"% (self.numVertexUsages, self.vertexFormatFloatLen))
-        print("found %d faces in mesh.." % len(self.parts))
         for face in self.parts:
-            print("Polygon index: %d, length: %d" % (face.index, face.loop_total))
             #for vertexid in face.vertices:
             self.writeVertex(0, face, f);
             self.writeVertex(1, face, f);
@@ -299,13 +326,6 @@ class Mesh(Reference):
         f.write(struct.pack("<I",4));#GL_TRIANGLES
         f.write(struct.pack("<I",5125));#Unsigned int Index format
         f.write(struct.pack("<I",len(self.parts)*3*4));#Unsigned int Index format
-        '''
-        #instead of export the original index array..
-        for p in self.parts:
-            f.write(struct.pack("<I",p.vertices[0]));#VextexSize 3 (x,y,z)
-            f.write(struct.pack("<I",p.vertices[1]));#VextexSize 3 (x,y,z)
-            f.write(struct.pack("<I",p.vertices[2]));#VextexSize 3 (x,y,z)
-        '''
         i = 0
         for face in self.parts:
             for vertexid in face.vertices:
@@ -353,7 +373,6 @@ class MeshSkin(Reference):
         return ;   
         
         
-#cesar
 class Light(Reference):
     lightType = None#byte, see LampType class
     color = []#float r b g 
@@ -566,38 +585,7 @@ class Exporter(bpy.types.Operator, ExportHelper):
         mesh = bobject.to_mesh(bpy.context.scene,True,'PREVIEW');
         meshes_to_clear.append(mesh);
         node= Node();
-        node.transforms[0]=bobject.matrix_world[0][0];
-        node.transforms[1]=bobject.matrix_world[1][0];
-        node.transforms[2]=bobject.matrix_world[2][0];
-        node.transforms[3]=bobject.matrix_world[3][0];
-        node.transforms[4]=bobject.matrix_world[0][1];
-        node.transforms[5]=bobject.matrix_world[1][1];
-        node.transforms[6]=bobject.matrix_world[2][1];
-        node.transforms[7]=bobject.matrix_world[3][1];
-        node.transforms[8]=bobject.matrix_world[0][2];
-        node.transforms[9]=bobject.matrix_world[1][2];
-        node.transforms[10]=bobject.matrix_world[2][2];
-        node.transforms[11]=bobject.matrix_world[3][2];
-        node.transforms[12]=bobject.matrix_world[0][3];
-        node.transforms[13]=bobject.matrix_world[1][3];
-        node.transforms[14]=bobject.matrix_world[2][3];
-        node.transforms[15]=bobject.matrix_world[3][3];
-        #node.transforms[0]=0;
-        #node.transforms[1]=0;
-        #node.transforms[2]=0;
-        #node.transforms[3]=0;
-        #node.transforms[4]=0;
-        #node.transforms[5]=0;
-        #node.transforms[6]=0;
-        #node.transforms[7]=0;
-        #node.transforms[8]=0;
-        #node.transforms[9]=0;
-        #node.transforms[10]=0;
-        #node.transforms[11]=0;
-        #node.transforms[12]=bobject.location[0];
-        #node.transforms[13]=bobject.location[1];
-        #node.transforms[14]=bobject.location[2];
-        #node.transforms[15]=0;
+        node.setTransform(bobject.matrix_world);
         node.model=Model();
         node.model.mesh=Mesh();
         node.reference=bobject.name;
@@ -615,22 +603,7 @@ class Exporter(bpy.types.Operator, ExportHelper):
     def procesarCamera(self, cam):
         bobject=bpy.data.objects[cam.name];
         node= Node();
-        node.transforms[0]=bobject.matrix_world[0][0];
-        node.transforms[1]=bobject.matrix_world[1][0];
-        node.transforms[2]=bobject.matrix_world[2][0];
-        node.transforms[3]=bobject.matrix_world[3][0];
-        node.transforms[4]=bobject.matrix_world[0][1];
-        node.transforms[5]=bobject.matrix_world[1][1];
-        node.transforms[6]=bobject.matrix_world[2][1];
-        node.transforms[7]=bobject.matrix_world[3][1];
-        node.transforms[8]=bobject.matrix_world[0][2];
-        node.transforms[9]=bobject.matrix_world[1][2];
-        node.transforms[10]=bobject.matrix_world[2][2];
-        node.transforms[11]=bobject.matrix_world[3][2];
-        node.transforms[12]=bobject.matrix_world[0][3];
-        node.transforms[13]=bobject.matrix_world[1][3];
-        node.transforms[14]=bobject.matrix_world[2][3];
-        node.transforms[15]=bobject.matrix_world[3][3];
+        node.setTransform(bobject.matrix_world);
         node.camera=Camera();
         node.reference=cam.name;
         node.camera.reference=cam.name+"cam";
@@ -684,6 +657,13 @@ class Exporter(bpy.types.Operator, ExportHelper):
             node.light.outerAngle = lampdata.spot_size;
         self.objetos.append(node);
         return node;
+    
+    def procesarEmpty(self, empty):
+        node= Node();
+        node.setTransform(empty.matrix_world);
+        node.reference = empty.name
+        self.objetos.append(node);
+        return node;
         
     def execute(self, context):
         global meshes_to_clear;
@@ -694,6 +674,7 @@ class Exporter(bpy.types.Operator, ExportHelper):
         # Set the default return state to FINISHED
         result = {'FINISHED'};
         # Check that the currently selected object contains mesh data for exporting
+        numemptys = 0
         self.objetos=[];
         self.animaciones=Animations();
         self.animaciones.reference="__animations__";
@@ -702,6 +683,9 @@ class Exporter(bpy.types.Operator, ExportHelper):
                 self.procesarMesh(ob);
             elif ob.type == 'LAMP':
                 self.procesarLamp(ob);
+            elif ob.type == 'EMPTY':
+                self.procesarEmpty(ob);
+                numemptys = numemptys+1
         # Create a file header object with data stored in the body section   
         # Open the file for writing
         camera = self.procesarCamera(bpy.data.cameras[bpy.context.scene.camera.name]);
@@ -710,7 +694,10 @@ class Exporter(bpy.types.Operator, ExportHelper):
         file.write(b'\xABGPB\xBB\r\n\x1A\n');
         file.write(struct.pack("B",1));
         file.write(struct.pack("B",2));
-        file.write(struct.pack("<I",len(self.objetos)*2+1));#+1 for scene reference , *2 for node+mesh reference and node+camera reference 
+        #+1 for scene reference , *2 for node+mesh reference and node+camera reference .. 
+        # empties have not data associated
+        numreferences = len(self.objetos)*2+1-numemptys;
+        file.write(struct.pack("<I",numreferences));
         scene=Reference();
         scene.tipo=ReferenceType.SCENE;
         scene.reference="__SCENE__";
