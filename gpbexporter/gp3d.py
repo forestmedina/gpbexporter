@@ -2,6 +2,7 @@
 Created on 10/05/2013
 
 @author: forestmedina
+@contributor: cesarpachon
 '''
 
 import bpy;
@@ -67,7 +68,7 @@ class Node(Reference):
     parent_id  =""   #string
     childrens   =[]  #Node[]
     camera     =None    #Camera
-    light      =""   #Light
+    light      =None   #Light
     model      =None   #Model
     
     def __init__(self):
@@ -129,8 +130,7 @@ class Node(Reference):
         if not self.camera is None:
             self.camera.writeData(f);
         else:
-            f.write(struct.pack("B",0));
-            
+            f.write(struct.pack("B",0));            
         if not self.light is None:
             self.light.writeData(f);
         else:
@@ -140,6 +140,9 @@ class Node(Reference):
         else:
             f.write(struct.pack("<I",0));#mesh
         return ;
+    def setParent(self, bobject):
+        if not bobject.parent is None:
+            self.parent_id=bobject.parent.name;
         
     def setTransform(self, bobject):
         matrix = bobject.matrix_basis
@@ -245,7 +248,7 @@ class Mesh(Reference):
     #
     # writes a single vertex info to the stream.
     # notice that each vertex may be written many times,
-    # because different polygons share the same vertices
+    # because different polygons share the same vertices 
     # with different uv coordinates.
     #
     def writeVertex(self, vertexfaceid, face, f):
@@ -256,7 +259,7 @@ class Mesh(Reference):
         f.write(struct.pack("<f",v.co[2]));#VextexSize 3 (x,y,z)
         f.write(struct.pack("<f",v.normal[0]));#VextexSize 3 (x,y,z)
         f.write(struct.pack("<f",v.normal[1]));#VextexSize 3 (x,y,z)
-        f.write(struct.pack("<f",-v.normal[2]));#VextexSize 3 (x,y,z)
+        f.write(struct.pack("<f",v.normal[2]));#VextexSize 3 (x,y,z)
         if self.useVertexWeights:
             ngroups=0;
             for g in v.groups:
@@ -291,7 +294,7 @@ class Mesh(Reference):
         self.vertexFormatFloatLen=3+3#three floats from POSITION, three floats from NORMAL
         if self.useVertexWeights:
             self.numVertexUsages +=2
-            self.vertexFormatFloatLen +=8#four floats for BLENDINDICES, four for BLENDWEIGHTS
+            self.vertexFormatFloatLen +=8#four floats for BLENDINDICES, four for BLENDWEIGHTS 
         if self.useUVLayers:
             #num of usages depends of number of uvlayers..
             self.numVertexUsages += len(self.uvLayers)
@@ -317,10 +320,13 @@ class Mesh(Reference):
                 #print("usage TEXTCOORDID%d*2"%textcoordid)
                 f.write(struct.pack("<I", textcoordid));
                 f.write(struct.pack("<I", 2));#two floats for U,V
-        #size in bytes that will require each vertex element
+        #size in bytes that will require each vertex element 
         f.write(struct.pack("<I",3*len(self.parts)*(self.vertexFormatFloatLen)*4));
         #iterate over polygons and writes each vertex
+        print("each vertex will have %d usages and use %d*4 bytes"% (self.numVertexUsages, self.vertexFormatFloatLen))
+        print("found %d faces in mesh.." % len(self.parts))
         for face in self.parts:
+            print("Polygon index: %d, length: %d" % (face.index, face.loop_total))
             #for vertexid in face.vertices:
             self.writeVertex(0, face, f);
             self.writeVertex(1, face, f);
@@ -345,6 +351,13 @@ class Mesh(Reference):
         f.write(struct.pack("<I",4));#GL_TRIANGLES
         f.write(struct.pack("<I",5125));#Unsigned int Index format
         f.write(struct.pack("<I",len(self.parts)*3*4));#Unsigned int Index format
+        '''
+        #instead of export the original index array..
+        for p in self.parts:
+            f.write(struct.pack("<I",p.vertices[0]));#VextexSize 3 (x,y,z)
+            f.write(struct.pack("<I",p.vertices[1]));#VextexSize 3 (x,y,z)
+            f.write(struct.pack("<I",p.vertices[2]));#VextexSize 3 (x,y,z)
+        '''
         i = 0
         for face in self.parts:
             for vertexid in face.vertices:
@@ -373,23 +386,22 @@ class MeshSkin(Reference):
             f.write(struct.pack("<I",len(j.reference)+1));#mesh
             f.write(bytearray('#',"ascii"));
             f.write(bytearray(j.reference,"ascii"));
-            print(j.reference)
 
         f.write(struct.pack("<I",len(self.joints)*16));#joints
         for b in self.jointBindPoses:
             f.write(struct.pack("<f",b));
         #Omit bounding box
-        #f.write(struct.pack("<f",-1.0));#Omit bounding box
-        #f.write(struct.pack("<f",-1.0));#Omit bounding box
-        #f.write(struct.pack("<f",-1.0));#Omit bounding box
-        #f.write(struct.pack("<f",1.0));#Omit bounding box
-        #f.write(struct.pack("<f",1.0));#Omit bounding box
-        #f.write(struct.pack("<f",1.0));#Omit bounding box
+        #f.write(struct.pack("<f",0));#Omit bounding box
+        #f.write(struct.pack("<f",0));#Omit bounding box
+        #f.write(struct.pack("<f",0));#Omit bounding box
+        #f.write(struct.pack("<f",0));#Omit bounding box
+        #f.write(struct.pack("<f",0));#Omit bounding box
+        #f.write(struct.pack("<f",0));#Omit bounding box
         #Omit bounding sphere
         #f.write(struct.pack("<f",0));#Omit bounding sphere
         #f.write(struct.pack("<f",0));#Omit bounding sphere
         #f.write(struct.pack("<f",0));#Omit bounding sphere
-        #f.write(struct.pack("<f",1.0));#Omit bounding sphere
+        #f.write(struct.pack("<f",0));#Omit bounding sphere
         return ;   
         
         
@@ -534,9 +546,7 @@ class ReferenceType:
     MESH=34;
     MESHSKIN=36;
     CAMERA=32;
-    LIGHT=33; #cesar
-    
-    
+    LIGHT=33; 
 
 
 class NodeType:
@@ -552,7 +562,7 @@ class LampType:
     
 
 
-#class Exporter():
+
 class Exporter(bpy.types.Operator, ExportHelper):
     bl_idname       = "export_gameplay.gpb";
     bl_label        = "Gameplay3d Exporter";
@@ -750,11 +760,11 @@ class Exporter(bpy.types.Operator, ExportHelper):
         self.animaciones.animations.append(ani);
         
     def procesarMesh(self, bobject):
-        print("processing mesh %s"%bobject.name);
         mesh = bobject.to_mesh(bpy.context.scene,True,'PREVIEW');
         meshes_to_clear.append(mesh);
         node= Node();
         node.setTransform(bobject);
+        node.setParent(bobject);
         node.model=Model();
         node.model.mesh=Mesh();
         node.reference=bobject.name;
@@ -772,8 +782,8 @@ class Exporter(bpy.types.Operator, ExportHelper):
         return node;
         
         
-    def procesarCamera(self, cam):
-        bobject=bpy.data.objects[cam.name];
+    def procesarCamera(self, bobject):
+        cam=bobject.data;
         node= Node();
         node.transforms[0]=bobject.matrix_world[0][0];
         node.transforms[1]=bobject.matrix_world[1][0];
@@ -791,6 +801,7 @@ class Exporter(bpy.types.Operator, ExportHelper):
         node.transforms[13]=bobject.matrix_world[1][3];
         node.transforms[14]=bobject.matrix_world[2][3];
         node.transforms[15]=bobject.matrix_world[3][3];
+        node.setParent(bobject);
         node.camera=Camera();
         node.reference=cam.name;
         node.camera.reference=cam.name+"cam";
@@ -802,8 +813,10 @@ class Exporter(bpy.types.Operator, ExportHelper):
         return node;        
         
     def procesarLamp(self, lamp):
+
         bobject=lamp;
         node= Node();
+        node.setParent(bobject);
         node.transforms[0]=bobject.matrix_world[0][0];
         node.transforms[1]=bobject.matrix_world[1][0];
         node.transforms[2]=bobject.matrix_world[2][0];
@@ -842,7 +855,14 @@ class Exporter(bpy.types.Operator, ExportHelper):
             #spot_size is in radians!
             node.light.innerAngle = lampdata.spot_size;    
             node.light.outerAngle = lampdata.spot_size;
-        print("procesando lamp ");
+        self.objetos.append(node);
+        return node;
+    
+    def procesarEmpty(self, empty):
+        node= Node();
+        node.setParent(empty);
+        node.setTransform(empty);
+        node.reference = empty.name;
         self.objetos.append(node);
         return node;
         
@@ -855,6 +875,7 @@ class Exporter(bpy.types.Operator, ExportHelper):
         # Set the default return state to FINISHED
         result = {'FINISHED'};
         # Check that the currently selected object contains mesh data for exporting
+        numemptys = 0
         self.objetos=[];
         self.animaciones=Animations();
         self.animaciones.reference="__animations__";
@@ -863,9 +884,12 @@ class Exporter(bpy.types.Operator, ExportHelper):
                 self.procesarMesh(ob);
             elif ob.type == 'LAMP':
                 self.procesarLamp(ob);
+            elif ob.type == 'EMPTY':
+                self.procesarEmpty(ob);
+                numemptys = numemptys+1
         # Create a file header object with data stored in the body section   
         # Open the file for writing
-        camera = self.procesarCamera(bpy.data.cameras[bpy.context.scene.camera.name]);
+        camera = self.procesarCamera(bpy.context.scene.camera);
         self.objetos.append(camera);
         file = open(self.filepath, 'bw');
         file.write(b'\xABGPB\xBB\r\n\x1A\n');
@@ -908,5 +932,6 @@ class Exporter(bpy.types.Operator, ExportHelper):
         for m in meshes_to_clear:
             bpy.data.meshes.remove(m);
         return result;
+
 
 
