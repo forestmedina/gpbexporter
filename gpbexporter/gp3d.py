@@ -140,9 +140,14 @@ class Node(Reference):
         else:
             f.write(struct.pack("<I",0));#mesh
         return ;
+
     def setParent(self, bobject):
         if not bobject.parent is None:
-            self.parent_id=bobject.parent.name;
+            if bobject.parent.type == 'ARMATURE':
+                if not bobject.parent.parent is None:
+                    self.parent_id=bobject.parent.parent.name;
+            else:
+                self.parent_id=bobject.parent.name;
         
     def setTransform(self, bobject):
         matrix = bobject.matrix_basis
@@ -323,28 +328,28 @@ class Mesh(Reference):
         #size in bytes that will require each vertex element 
         f.write(struct.pack("<I",3*len(self.parts)*(self.vertexFormatFloatLen)*4));
         #iterate over polygons and writes each vertex
-        print("each vertex will have %d usages and use %d*4 bytes"% (self.numVertexUsages, self.vertexFormatFloatLen))
-        print("found %d faces in mesh.." % len(self.parts))
+#        print("each vertex will have %d usages and use %d*4 bytes"% (self.numVertexUsages, self.vertexFormatFloatLen))
+#        print("found %d faces in mesh.." % len(self.parts))
         for face in self.parts:
-            print("Polygon index: %d, length: %d" % (face.index, face.loop_total))
+#            print("Polygon index: %d, length: %d" % (face.index, face.loop_total))
             #for vertexid in face.vertices:
             self.writeVertex(0, face, f);
             self.writeVertex(1, face, f);
             self.writeVertex(2, face, f);
         #Omit bounding box
-        f.write(struct.pack("<f",0));#Omit bounding box
-        f.write(struct.pack("<f",0));#Omit bounding box
-        f.write(struct.pack("<f",0));#Omit bounding box
-        f.write(struct.pack("<f",0));#Omit bounding box
-        f.write(struct.pack("<f",0));#Omit bounding box
-        f.write(struct.pack("<f",0));#Omit bounding box
+        f.write(struct.pack("<f",-1));#Omit bounding box
+        f.write(struct.pack("<f",-1));#Omit bounding box
+        f.write(struct.pack("<f",-1));#Omit bounding box
+        f.write(struct.pack("<f",1));#Omit bounding box
+        f.write(struct.pack("<f",1));#Omit bounding box
+        f.write(struct.pack("<f",1));#Omit bounding box
 
 
         #Omit bounding sphere
         f.write(struct.pack("<f",0));#Omit bounding sphere
         f.write(struct.pack("<f",0));#Omit bounding sphere
         f.write(struct.pack("<f",0));#Omit bounding sphere
-        f.write(struct.pack("<f",0));#Omit bounding sphere
+        f.write(struct.pack("<f",2));#Omit bounding sphere
         
         #mesh parts (faces index array)
         f.write(struct.pack("<I",1));#MeshPart Array of only 1 part
@@ -378,7 +383,7 @@ class MeshSkin(Reference):
 
     def writeData(self,f):
         self.offset=f.tell();
-        print("BindShape "+str(len(self.bindShape)));
+#        print("BindShape "+str(len(self.bindShape)));
         for b in self.bindShape:
             f.write(struct.pack("<f",b));
         f.write(struct.pack("<I",len(self.joints)));#joints
@@ -419,7 +424,7 @@ class Light(Reference):
     
     def writeData(self, f):
         self.offset=f.tell();
-        print("lamp writeData %d"%self.offset);
+#        print("lamp writeData %d"%self.offset);
         f.write(struct.pack("B",self.lightType));
         f.write(struct.pack("<f",self.color[0]));
         f.write(struct.pack("<f",self.color[1]));
@@ -463,7 +468,7 @@ class Animations(Reference):
     def writeReference(self,f):
         Reference.writeReference(self,f);
         for c in self.animations:
-            print (c.reference)
+#            print (c.reference)
             c.writeReference(f);
         return;
         
@@ -496,7 +501,7 @@ class Animation(Reference):
             f.write(bytearray(self.idani,"ascii"));
         f.write(struct.pack("<I",len(self.channels)));
         for a in self.channels:
-            print (a.reference)
+#            print (a.reference)
             a.writeData(f);      
         return ;  
      
@@ -517,7 +522,7 @@ class AnimationChannel(Reference):
         f.write(struct.pack("<I",len(self.targetId)));
         if len(self.targetId)>0:
             f.write(bytearray(self.targetId,"ascii"));
-            print (self.targetId)
+#            print (self.targetId)
         f.write(struct.pack("<I",self.targetAttribute));
         
         f.write(struct.pack("<I",len(self.keyTimes)));
@@ -570,6 +575,13 @@ class Exporter(bpy.types.Operator, ExportHelper):
     filename_ext    = ".gpb";
     objetos=[];
 
+    def imprimirArbol(self,node,nivel):
+        for i in range(0,nivel):
+            print("-", end="");
+        print(node.reference);
+        for c in node.childrens:
+            self.imprimirArbol(c,nivel+1);
+        
     def fixBoneMatrix(self,matrix):
         matrix_world = mathutils.Matrix().Identity(4);
         loc = matrix.to_translation().copy();
@@ -594,6 +606,7 @@ class Exporter(bpy.types.Operator, ExportHelper):
         armature = bobject.data;
         nodeMesh.model.meshSkin=MeshSkin();
         node= Node();
+        node.setParent(bobject);
         matriz=bobject.matrix_basis;
         node.transforms[0]=matriz[0][0];
         node.transforms[1]=matriz[1][0];
@@ -700,8 +713,6 @@ class Exporter(bpy.types.Operator, ExportHelper):
             nodeMesh.model.meshSkin.jointBindPoses[14+i*16]=matriz[2][3];
             nodeMesh.model.meshSkin.jointBindPoses[15+i*16]=matriz[3][3];
             #****
-         
-            
             bone.tipoNodo=NodeType.JOINT;
             huesos[bone.reference]=bone;
             i+=1;
@@ -723,21 +734,29 @@ class Exporter(bpy.types.Operator, ExportHelper):
         ani.idani=mesh.name+"ani";
         ani.reference=mesh.name+"ani";
         armature = bobject;
-        
+        auxChannels={};
+
+        #Create the channels
         for b in armature.pose.bones:
             channel= AnimationChannel();
             channel.targetId=bobject.name+b.name;
-            mtx4_z90 =mathutils.Matrix.Rotation(math.radians(-90), 4, "X")
+            auxChannels[b.name]=channel;
+            ani.channels.append(channel);
 
-            for i in range(start,end):
-                bpy.context.scene.frame_set(i);
+        mtx4_z90 =mathutils.Matrix.Rotation(math.radians(-90), 4, "X")
+            
+        for i in range(start,end):
+            bpy.context.scene.frame_set(i);
+            for b in armature.pose.bones:
+                channel=auxChannels[b.name];
+
                 channel.keyTimes.append(round(i*(1000/fps)));
                 #print("keyTime : "+str(round(i*(1000/fps))));
                 #matriz=b.matrix*mtx4_z90;
 
-#                matriz=bobject.matrix_local*b.matrix;
- #               matriz= mathutils.Matrix();
-#                matriz.Translation(b.matrix.translation);
+    #                matriz=bobject.matrix_local*b.matrix;
+    #               matriz= mathutils.Matrix();
+    #                matriz.Translation(b.matrix.translation);
                 if b.parent is None:
                     matriz=self.fixBoneMatrix(b.matrix);
                 else:
@@ -756,7 +775,7 @@ class Exporter(bpy.types.Operator, ExportHelper):
                 channel.values.append(location[0]);
                 channel.values.append(location[1]);
                 channel.values.append(location[2]);
-            ani.channels.append(channel);
+
         self.animaciones.animations.append(ani);
         
     def procesarMesh(self, bobject):
@@ -764,7 +783,7 @@ class Exporter(bpy.types.Operator, ExportHelper):
         meshes_to_clear.append(mesh);
         node= Node();
         node.setTransform(bobject);
-        node.setParent(bobject);
+        #node.setParent(bobject);
         node.model=Model();
         node.model.mesh=Mesh();
         node.reference=bobject.name;
@@ -803,8 +822,8 @@ class Exporter(bpy.types.Operator, ExportHelper):
         node.transforms[15]=bobject.matrix_world[3][3];
         node.setParent(bobject);
         node.camera=Camera();
-        node.reference=cam.name;
-        node.camera.reference=cam.name+"cam";
+        node.reference=bobject.name;
+        node.camera.reference=bobject.name+"cam";
         node.camera.cameraType=1;
         node.camera.aspectRatio=1.700000;
         node.camera.nearPlane=cam.clip_start;
@@ -865,6 +884,22 @@ class Exporter(bpy.types.Operator, ExportHelper):
         node.reference = empty.name;
         self.objetos.append(node);
         return node;
+
+    def procesarHijos(self):
+        padres={};
+        remover=[];
+        for o in self.objetos:
+            padres[o.reference]=o;
+        for o in self.objetos:
+            if not o.parent_id is None:
+                p=padres[o.parent_id];
+                if not p is None:
+                    if p.childrens is None:
+                        p.childrens=[]
+                    p.childrens.append(o);
+                    remover.append(o);
+        for r in remover:
+            self.objetos.remove(r);
         
     def execute(self, context):
         global meshes_to_clear;
@@ -891,7 +926,7 @@ class Exporter(bpy.types.Operator, ExportHelper):
         # Open the file for writing
         camera = self.procesarCamera(bpy.context.scene.camera);
         self.objetos.append(camera);
-        file = open(self.filepath, 'bw');
+        file = open(self.filepath, 'bw',4000000);
         file.write(b'\xABGPB\xBB\r\n\x1A\n');
         file.write(struct.pack("B",1));
         file.write(struct.pack("B",2));
@@ -900,7 +935,10 @@ class Exporter(bpy.types.Operator, ExportHelper):
         scene=Reference();
         scene.tipo=ReferenceType.SCENE;
         scene.reference="__SCENE__";
-        scene.writeReference(file);
+        scene.writeReference(file); 
+        self.procesarHijos();
+        for o in  self.objetos:
+            self.imprimirArbol(o,0);
         for o in  self.objetos:
             o.writeReference(file);
         self.animaciones.writeReference(file);
@@ -927,7 +965,7 @@ class Exporter(bpy.types.Operator, ExportHelper):
         scene.updateOffset(file);
         self.animaciones.updateOffset(file);
         file.seek(referece_position);
-        file.write(struct.pack("<I",reference_count));#+1 for scene reference , *2 for node+mesh reference and node+camera reference 
+        file.write(struct.pack("<I",reference_count));
         file.close();
         for m in meshes_to_clear:
             bpy.data.meshes.remove(m);
